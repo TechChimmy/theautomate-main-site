@@ -1,4 +1,4 @@
-import {defineType, defineField} from 'sanity'
+import { defineType, defineField } from 'sanity'
 
 export default defineType({
   name: 'courseDetails',
@@ -16,10 +16,24 @@ export default defineType({
     }),
 
     defineField({
+      name: "useExistingProduct",
+      title: "Use Existing LMS Product",
+      type: "boolean",
+      initialValue: false,
+    }),
+
+    defineField({
+      name: "productUuid",
+      title: "Linked Product",
+      type: "string",
+      hidden: ({ parent }) => !parent?.useExistingProduct,
+    }),
+
+    defineField({
       name: 'slug',
       title: 'Slug',
       type: 'slug',
-      options: {source: 'title'},
+      options: { source: 'title' },
       validation: (Rule) => Rule.required(),
     }),
 
@@ -30,7 +44,7 @@ export default defineType({
       of: [
         {
           type: 'reference',
-          to: [{type: 'plan'}],
+          to: [{ type: 'plan' }],
         },
       ],
       description: 'Select the plan bundles that include this course.',
@@ -91,9 +105,9 @@ export default defineType({
         {
           type: 'object',
           fields: [
-            {name: 'title', type: 'string', title: 'Title'},
-            {name: 'icon', type: 'image', title: 'Icon'},
-            {name: 'description', type: 'string', title: 'Description'},
+            { name: 'title', type: 'string', title: 'Title' },
+            { name: 'icon', type: 'image', title: 'Icon' },
+            { name: 'description', type: 'string', title: 'Description' },
           ],
         },
       ],
@@ -105,7 +119,7 @@ export default defineType({
       name: 'description',
       title: 'Course Description',
       type: 'array',
-      of: [{type: 'block'}],
+      of: [{ type: 'block' }],
     }),
 
     /* ---------------- ENROLL CARD ---------------- */
@@ -137,7 +151,7 @@ export default defineType({
       name: 'whoFor',
       title: 'Who is this course for?',
       type: 'array',
-      of: [{type: 'string'}],
+      of: [{ type: 'string' }],
     }),
 
     /* ---------------- WHAT YOU LEARN ---------------- */
@@ -151,14 +165,14 @@ export default defineType({
           type: 'object',
           name: 'module',
           fields: [
-            {name: 'subheading', title: 'Subheading (e.g. Tosca Fundamentals)', type: 'string'},
+            { name: 'subheading', title: 'Subheading (e.g. Tosca Fundamentals)', type: 'string' },
             {
               name: 'points',
               title: 'Major Points',
               type: 'array',
-              of: [{type: 'string'}],
+              of: [{ type: 'string' }],
             },
-            {name: 'summary', title: 'Module Summary (Short Footer Text)', type: 'string'},
+            { name: 'summary', title: 'Module Summary (Short Footer Text)', type: 'string' },
           ],
         },
       ],
@@ -170,7 +184,7 @@ export default defineType({
       name: 'outcomes',
       title: 'Outcomes',
       type: 'array',
-      of: [{type: 'string'}],
+      of: [{ type: 'string' }],
     }),
 
     /* ---------------- HIGHLIGHTS ---------------- */
@@ -183,8 +197,8 @@ export default defineType({
         {
           type: 'object',
           fields: [
-            {name: 'icon', type: 'image', title: 'Icon'},
-            {name: 'title', type: 'string', title: 'Title'},
+            { name: 'icon', type: 'image', title: 'Icon' },
+            { name: 'title', type: 'string', title: 'Title' },
           ],
         },
       ],
@@ -213,7 +227,7 @@ export default defineType({
       name: 'batchDetails',
       title: 'Batch Details',
       type: 'array',
-      of: [{type: 'string'}],
+      of: [{ type: 'string' }],
     }),
   ],
 })

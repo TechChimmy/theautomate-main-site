@@ -16,7 +16,9 @@
   ],
   "dependencies": {
     "@sanity/code-input": "^7.0.6",
+    "@sanity/ui": "^3.4.2",
     "@sanity/vision": "^5.31.1",
+    "@supabase/supabase-js": "^2.110.8",
     "react": "^19.1",
     "react-dom": "^19.1",
     "sanity": "^5.31.1",
