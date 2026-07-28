@@ -1,229 +1,124 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
+import React from "react";
 import { motion } from "framer-motion";
-import { urlFor } from "@/lib/sanity.client";
-import { Plan, PlanFeature } from "@/lib/types/plan";
+import Image from "next/image";
 
-const FEATURE_HINTS: Record<string, string> = {
-  "Live support":
-    "This feature provides real-time access to instructors and mentors during lessons.",
-  "Project work":
-    "This feature delivers guided project assignments that you can build and complete step by step.",
-  "Cross-browser testing":
-    "This feature runs your automated tests across different browsers to verify compatibility.",
-  "Advanced reporting":
-    "This feature generates detailed reports for your test runs and shows result summaries.",
-  "AI-assisted testing":
-    "This feature uses AI to suggest test cases and improve coverage for your automation scripts.",
-  "Quality engineering":
-    "This feature includes best-practice checklists and standards for reliable automation.",
-  "End-to-end architecture":
-    "This feature maps the full automation workflow from user action to system validation.",
-  "Performance testing":
-    "This feature measures application behavior under load and captures performance metrics.",
-  "Hands-on labs":
-    "This feature gives you guided exercises with real code and step-by-step instructions.",
-  "Mentor sessions":
-    "This feature schedules one-on-one sessions with experts to review your work.",
-  "Certification support":
-    "This feature includes exam prep materials and practice resources for certification.",
-  "Tool integration":
-    "This feature connects your automation setup with popular development and collaboration tools.",
-  "Debugging workflows":
-    "This feature outlines a process for finding and fixing bugs in your automated tests.",
-};
-
-function getFeatureDetails(features?: PlanFeature[]) {
-  if (!features?.length) return [];
-
-  return features
-    .filter((feature) => feature.included)
-    .map((feature) => ({
-      label: feature.title,
-      detail:
-        FEATURE_HINTS[feature.title] ||
-        `A helpful addition that makes ${feature.title.toLowerCase()} easier and more effective.`,
-    }));
-}
-
-const PLAN_BRIEFS = [
+const milestones = [
   {
-    title: "Starter",
-    text: "A beginner-friendly plan to launch your automation journey with confidence. It covers the essential tools, hands-on workflows, and practical examples you need to start building reliable tests.",
+    year: "2022",
+    title: "The Vision: Shifting from Slides to Skills",
+    image: "/images/story-2022.png",
+    description: "Founded by senior QA engineers who noticed that traditional academies relied on passive slides and basic script writing. We set out to design a rigorous, builder-focused program that teaches standard software patterns, modern frameworks, and true automation principles.",
     points: [
-      {
-        label: "Core Automation Skills",
-        detail:
-          "Learn the fundamentals of test automation with guided demos and hands-on exercises.",
-      },
-      {
-        label: "Workflow Building",
-        detail:
-          "Create practical test flows and end-to-end scenarios that reflect real-world use cases.",
-      },
-      {
-        label: "Confidence Boost",
-        detail:
-          "Gain the ability to apply theory in practice and build a strong foundation in QA work.",
-      },
-    ],
+      "Replacing passive slides with active programming sandbox environments",
+      "Focusing on modular, scalable software design testing patterns",
+      "Bridging the knowledge gap between manual testing and SDET roles"
+    ]
   },
   {
-    title: "Pro",
-    text: "An ideal plan for learners ready to scale their automation skills. It adds real project-based challenges, advanced troubleshooting, and team-friendly techniques for more impactful testing.",
+    year: "2023",
+    title: "Going Hands-On: Production-Ready Pipelines",
+    image: "/images/story-2023.png",
+    description: "We eliminated theoretical training entirely and introduced our Live Project ecosystem. Learners started designing real-world automation test suites, debugging execution threads, and integrating CI/CD pipelines in production-equivalent setups from day one.",
     points: [
-      {
-        label: "Project-Based Learning",
-        detail:
-          "Work through real automation scenarios and learn how to solve common testing challenges.",
-      },
-      {
-        label: "Advanced Debugging",
-        detail:
-          "Use better error tracing, reporting, and optimization to improve test reliability.",
-      },
-      {
-        label: "Team-Ready Practices",
-        detail:
-          "Adopt patterns and processes that make collaboration easier for cross-functional teams.",
-      },
-    ],
+      "Integrating test frameworks with Github Actions & CI/CD tools",
+      "Deploying test run automation across parallel browser grids",
+      "Diagnosing and debugging real-world software compilation bugs"
+    ]
   },
   {
-    title: "Premium",
-    text: "A premium plan for professionals seeking scalable, leadership-ready automation. It focuses on architecture, best practices, and the strategic skills for managing complex testing initiatives.",
+    year: "2024",
+    title: "Global Impact: Placing Leadership-Ready SDETs",
+    image: "/images/story-2024.png",
+    description: "Expanded our community to 10K+ active learners worldwide and built active placement networks with 50+ leading MNC hiring partners. Today, our graduates lead QA teams and software architectures across global industries.",
     points: [
-      {
-        label: "Strategic Architecture",
-        detail:
-          "Learn how to design scalable automation systems with integrations and quality control.",
-      },
-      {
-        label: "Quality Engineering",
-        detail:
-          "Apply industry best practices to deliver stable, maintainable test suites.",
-      },
-      {
-        label: "Leadership Focus",
-        detail:
-          "Build the mindset and tools needed to lead complex automation initiatives.",
-      },
-    ],
-  },
+      "Graduating 10,000+ active automated testing experts",
+      "Establishing placement partnerships with 50+ hiring MNCs",
+      "Empowering software testers to pivot to high-paying SDET careers"
+    ]
+  }
 ];
 
 export default function Story() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-
-  useEffect(() => {
-    async function loadPlans() {
-      try {
-        const response = await fetch("/api/plans");
-        if (!response.ok) throw new Error("Failed to fetch plans");
-        const data: Plan[] = await response.json();
-        setPlans(data.slice(0, 3));
-      } catch (error) {
-        console.error("Unable to load plans for about section", error);
-      }
-    }
-
-    loadPlans();
-  }, []);
-
   return (
-    <div id="about-story-section" className="px-6 py-14 md:py-20 md:px-16">
-      <h2 className="text-4xl font-bold text-center mb-12 text-[#0166A7]">
-        Our Plans
-      </h2>
-      <div className="relative max-w-7xl mx-auto">
-        <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gray-100 -translate-x-1/2 hidden md:block"></div>
-        <div className="space-y-14">
-          {PLAN_BRIEFS.map((item, index) => (
-            <TimelineItem
-              key={item.title}
-              side={index % 2 === 1 ? "right" : "left"}
-              brief={item}
-              plan={plans[index]}
-              imageSrc={index === 0 ? "/images/person.jpeg" : undefined}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+    <section id="about-story-section" className="py-12 md:py-16 bg-[#F8FAFC] border-t border-slate-100 relative">
+      {/* Soft background glow decorator */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[60%] rounded-full bg-blue-50/20 blur-3xl -z-10 pointer-events-none" />
 
-function TimelineItem({
-  side,
-  brief,
-  plan,
-  imageSrc,
-}: {
-  side: "left" | "right";
-  brief: {
-    title: string;
-    text: string;
-    points: {
-      label: string;
-      detail: string;
-    }[];
-  };
-  plan?: Plan;
-  imageSrc?: string;
-}) {
-  const imageUrl = imageSrc
-    ? imageSrc
-    : plan?.coverImage
-      ? urlFor(plan.coverImage).width(1200).url()
-      : "/placeholder.png";
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-start">
+          
+          {/* Left Column: Sticky Sidebar on Desktop */}
+          <div className="lg:col-span-4 lg:sticky lg:top-28 self-start text-left select-none">
+            <span className="text-xs font-bold text-[#0166A7] tracking-widest uppercase mb-2 block">
+              How We Evolved
+            </span>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#0F172A] tracking-tight leading-tight">
+              Our <span className="text-[#0166A7]">Journey</span>
+            </h2>
+            <p className="mt-4 text-slate-500 text-sm sm:text-base leading-relaxed max-w-sm">
+              From a single vision to a global automation training academy, we've continuously innovated the way engineers learn code.
+            </p>
+            {/* Visual Indicator Line */}
+            <div className="hidden lg:block w-0.5 bg-slate-200 h-24 mt-8 relative rounded-full overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1/2 bg-[#0166A7] rounded-full" />
+            </div>
+          </div>
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: side === "left" ? -50 : 50 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      className={`flex flex-col md:flex-row items-center gap-8 ${side === "right" ? "md:flex-row-reverse" : ""}`}
-    >
-      <div className="flex-1 order-2 md:order-1 text-center md:text-left">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-white border-4 border-blue-500 shadow-lg mb-6 mx-auto md:mx-0">
-          <div className="w-3.5 h-3.5 rounded-full bg-blue-500"></div>
-        </div>
-        <h3 className="text-2xl font-bold text-[#1E90FF] mb-3">
-          {brief.title}
-        </h3>
-        <p className="text-gray-600 leading-relaxed text-base mb-6">
-          {brief.text}
-        </p>
-        <div className="grid gap-4">
-          {(plan ? getFeatureDetails(plan.features) : brief.points).map(
-            (point, idx) => (
-              <div
-                key={`${brief.title}-point-${idx}`}
-                className="rounded-[28px] border border-blue-100 bg-blue-50 p-5 shadow-sm"
+          {/* Right Column: Vertical Scrolling Milestones */}
+          <div className="lg:col-span-8 flex flex-col gap-20 text-left">
+            {milestones.map((item, index) => (
+              <motion.div
+                key={item.year}
+                initial={{ opacity: 0, y: 35 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.6, delay: index * 0.05 }}
+                className="flex flex-col items-start border-b border-slate-200/50 pb-16 last:border-b-0 last:pb-0"
               >
-                <h4 className="text-sm font-semibold text-slate-900 mb-1">
-                  {point.label}
-                </h4>
-                <p className="text-sm text-slate-700 leading-6">
-                  {point.detail}
-                </p>
-              </div>
-            ),
-          )}
-        </div>
-      </div>
+                {/* Year Typography */}
+                <span className="text-5xl md:text-6xl font-black text-[#0166A7]/25 leading-none select-none tracking-tight">
+                  {item.year}
+                </span>
 
-      <div className="flex-1 order-1 md:order-2">
-        <div className="relative overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-xl min-h-[320px]">
-          <Image
-            src={imageUrl}
-            alt={`${brief.title} image`}
-            width={1200}
-            height={800}
-            className="object-cover w-full h-full"
-          />
+                {/* Milestone Title */}
+                <h3 className="text-2xl font-extrabold text-[#0F172A] mt-4 leading-snug">
+                  {item.title}
+                </h3>
+
+                {/* Description */}
+                <p className="text-slate-500 text-sm sm:text-base leading-relaxed mt-4">
+                  {item.description}
+                </p>
+
+                {/* Highlights List */}
+                <ul className="flex flex-col gap-3 mt-6 w-full">
+                  {item.points.map((point, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-600">
+                      <span className="w-5 h-5 rounded-full bg-[#c3e8e4]/60 text-[#1b5e55] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                        ✓
+                      </span>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Wide Letterbox Banner Image */}
+                <div className="relative w-full aspect-[16/7] rounded-3xl overflow-hidden shadow-md border border-slate-100/80 bg-slate-50 mt-8 group select-none">
+                  <Image
+                    src={item.image}
+                    alt={item.title}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out"
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
         </div>
       </div>
-    </motion.div>
+    </section>
   );
 }

@@ -34,42 +34,6 @@ export default function Navbar() {
   const trail2Ref = useRef<HTMLSpanElement>(null);
   const linkRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setScrolled(currentScrollY > 10);
-      
-      if (currentScrollY > lastScrollY.current && currentScrollY > 80) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-      
-      lastScrollY.current = currentScrollY;
-    };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    // Ensure the indicator is positioned correctly on mount and resize
-    const timer = setTimeout(() => {
-      moveIndicator(defaultIndex);
-    }, 50);
-
-    const handleResize = () => {
-      moveIndicator(defaultIndex);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [defaultIndex, pathname]);
-
   const { contextSafe } = useGSAP({ scope: navRef });
 
   const moveIndicator = contextSafe((index: number | null) => {
@@ -117,15 +81,59 @@ export default function Navbar() {
     });
   });
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setScrolled(currentScrollY > 10);
+      
+      if (currentScrollY > lastScrollY.current && currentScrollY > 80) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+      }
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      moveIndicator(defaultIndex);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [defaultIndex, moveIndicator]);
+
+  useEffect(() => {
+    // Recalculate at intervals during/after the transition to ensure the pill adjusts smoothly
+    const steps = [0, 100, 300, 500, 750];
+    const timers = steps.map((delay) =>
+      setTimeout(() => {
+        moveIndicator(defaultIndex);
+      }, delay)
+    );
+
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, [isVisible, scrolled, defaultIndex, pathname, moveIndicator]);
+
   return (
     <>
       <nav className="fixed inset-x-0 top-0 z-[60] pt-3 sm:px-4 md:px-6 md:pt-4 pointer-events-none flex justify-center">
         <div className="mx-auto flex w-full max-w-[1480px] px-3 sm:px-0 justify-start pointer-events-auto">
           <div
-            className={`flex h-[72px] items-center rounded-full border border-white/20 px-3 shadow-[0_10px_40px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] md:h-[78px] md:px-8 overflow-hidden ${
+            className={`flex h-[72px] items-center rounded-full border border-slate-200/50 bg-white px-3 shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] md:h-[78px] md:px-8 overflow-hidden ${
               scrolled
-                ? "mt-2 bg-white/22 shadow-[0_12px_45px_rgba(0,0,0,0.12)]"
-                : "mt-3 bg-white/12"
+                ? "mt-2 shadow-[0_12px_45px_rgba(0,0,0,0.1)] border-slate-300/40"
+                : "mt-3"
             } ${
               isVisible ? "w-[min(92vw,1480px)] sm:w-full" : "w-[160px] md:w-[230px]"
             }`}
@@ -225,14 +233,14 @@ export default function Navbar() {
             : "-translate-y-full opacity-0 invisible pointer-events-none"
         }`}
       >
-        <div className="mx-auto flex w-full max-w-[440px] flex-col rounded-[2rem] border border-white/25 bg-white/15 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.25)] backdrop-blur-2xl">
+        <div className="mx-auto flex w-full max-w-[440px] flex-col rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-[0_20px_80px_rgba(15,23,42,0.15)]">
           <div className="flex flex-col gap-5">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
                 onClick={() => setIsOpen(false)}
-                className="border-b border-white/20 pb-4 text-[1.05rem] font-semibold text-slate-800 transition-colors duration-200 active:text-[#0166A7]"
+                className="border-b border-slate-100 pb-4 text-[1.05rem] font-semibold text-slate-800 transition-colors duration-200 active:text-[#0166A7]"
               >
                 {link.name}
               </Link>

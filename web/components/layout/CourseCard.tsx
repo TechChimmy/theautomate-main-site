@@ -148,60 +148,50 @@ export default function CourseCard({
 
       {/* Hover Popover */}
       <div
-        className={`absolute top-1/2 -translate-y-1/2 w-[440px] bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200 p-8 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] pointer-events-none group-hover:pointer-events-auto flex flex-col gap-5
-          ${isRightEdge ? '-left-[460px]' : '-right-[460px]'}
-        `}
+        className="absolute inset-0 bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200 p-5 opacity-0 invisible scale-95 group-hover:scale-100 group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] pointer-events-none group-hover:pointer-events-auto flex flex-col justify-between"
       >
-        {/* Pointer / Arrow */}
-        <div
-          className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white transform rotate-45 rounded-sm
-            ${isRightEdge
-              ? '-right-2 border-t border-r border-slate-200'
-              : '-left-2 border-b border-l border-slate-200'
-            }
-          `}
-        ></div>
+        <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+          <h3 className="text-xl font-bold text-slate-900 leading-snug">
+            {title}
+          </h3>
 
-        <h3 className="text-xl font-bold text-slate-900 leading-snug">
-          {title}
-        </h3>
-
-        <div className="flex items-center gap-3">
-          <span className="bg-[#c3e8e4] text-[#1b5e55] text-sm font-bold px-3 py-1 rounded">
-            Bestseller
-          </span>
-          {formattedDate && (
-            <span className="text-base font-semibold text-green-700">
-              Updated {formattedDate}
+          <div className="flex items-center gap-3">
+            <span className="bg-[#c3e8e4] text-[#1b5e55] text-sm font-bold px-3 py-1 rounded">
+              Bestseller
             </span>
+            {formattedDate && (
+              <span className="text-base font-semibold text-green-700">
+                Updated {formattedDate}
+              </span>
+            )}
+          </div>
+
+          <div className="text-sm text-slate-500 font-medium">
+            {displayHours} total hours · {displayLevel} Level · Subtitles
+          </div>
+
+          {popupDescription && (
+            <p className="text-base text-slate-600 leading-relaxed">
+              {popupDescription}
+            </p>
+          )}
+
+          {displayOutcomes && displayOutcomes.length > 0 && (
+            <ul className="flex flex-col gap-4 mt-2">
+              {displayOutcomes.slice(0, 3).map((outcome, i) => (
+                <li key={i} className="flex gap-3 items-start">
+                  <Check size={20} className="text-slate-600 shrink-0 mt-0.5" />
+                  <span className="text-sm text-slate-600 leading-relaxed">
+                    {outcome}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        <div className="text-sm text-slate-500 font-medium">
-          {displayHours} total hours · {displayLevel} Level · Subtitles
-        </div>
-
-        {popupDescription && (
-          <p className="text-base text-slate-600 leading-relaxed">
-            {popupDescription}
-          </p>
-        )}
-
-        {displayOutcomes && displayOutcomes.length > 0 && (
-          <ul className="flex flex-col gap-4 mt-2">
-            {displayOutcomes.slice(0, 3).map((outcome, i) => (
-              <li key={i} className="flex gap-3 items-start">
-                <Check size={20} className="text-slate-600 shrink-0 mt-0.5" />
-                <span className="text-sm text-slate-600 leading-relaxed">
-                  {outcome}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
         <button
-          className="mt-5 w-full bg-brand-blue hover:bg-brand-dark text-white text-lg font-bold py-4 rounded-xl transition-colors"
+          className="mt-4 w-full bg-brand-blue hover:bg-brand-dark text-white text-lg font-bold py-4 rounded-xl transition-colors shrink-0"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

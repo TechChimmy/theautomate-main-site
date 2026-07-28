@@ -1,6 +1,7 @@
 import CTA from "@/components/layout/CTA";
 import FAQSection from "@/sections/contact-section/FAQSection";
 import ContactHero from "@/sections/contact-section/ContactHero";
+import HomeCTA from "@/sections/HomeCTA";
 
 export default function ContactPage() {
     return (
@@ -8,12 +9,7 @@ export default function ContactPage() {
             <ContactHero />
             <FAQSection />
 
-            <CTA
-                icon="/icons/book.png"
-                title="Start Learning Today"
-                description="Join the next wave of innovation. Your journey to mastering automation starts with a single click."
-                buttonText="Get The Course"
-            />
+            <HomeCTA />
         </main>
     );
 }

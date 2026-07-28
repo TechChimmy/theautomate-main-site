@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 
@@ -87,111 +87,156 @@ export default function Testimonials({ initialData }: TestimonialsProps) {
   const total = testimonials.length;
 
   /* We render the list THREE times (tripled) so we can loop infinitely
-     without any visible jump.  The strip starts positioned at the
-     centre copy and wraps back to it whenever it drifts outside bounds. */
+     without any visible jump. */
   const tripled = useMemo(
     () => [...testimonials, ...testimonials, ...testimonials],
     [testimonials],
   );
 
-  /* ── refs ── */
   const stripRef = useRef<HTMLDivElement>(null);
-  const tlRef = useRef<gsap.core.Timeline | null>(null);
-  const indexRef = useRef<number>(total); // start in the middle copy
-  const cardWidthRef = useRef<number>(0);
-  const gapRef = useRef<number>(0);
-  const visibleRef = useRef<number>(3);
+  const tweenRef = useRef<gsap.core.Tween | null>(null);
+  const isTransitioning = useRef(false);
+  const isHoveredRef = useRef(false);
 
-  /* ── measure card + gap once mounted, update on resize ── */
-  const measure = useCallback(() => {
-    if (!stripRef.current) return;
-    const card = stripRef.current.children[0] as HTMLElement | undefined;
-    if (!card) return;
-    const gap =
-      parseInt(getComputedStyle(stripRef.current).gap || "0", 10) || 24;
-    cardWidthRef.current = card.offsetWidth;
-    gapRef.current = gap;
-
-    const vw = window.innerWidth;
-    visibleRef.current = vw < 640 ? 1 : vw < 1024 ? 2 : 3;
-  }, []);
-
-  /* ── build / rebuild the auto-play timeline ── */
-  const buildTimeline = useCallback(() => {
+  const startMarquee = useCallback(() => {
     if (!stripRef.current || total === 0) return;
 
-    // kill existing
-    tlRef.current?.kill();
+    // Clean up any existing tween
+    if (tweenRef.current) {
+      tweenRef.current.kill();
+    }
 
-    const step = cardWidthRef.current + gapRef.current;
-    const n = tripled.length;
+    const card = stripRef.current.children[0] as HTMLElement | undefined;
+    if (!card) return;
 
-    // Ensure the strip is at the correct starting x for indexRef.current
-    const startX = -(indexRef.current * step);
-    gsap.set(stripRef.current, { x: startX });
+    const gap = parseInt(getComputedStyle(stripRef.current).gap || "24", 10);
+    const cardWidth = card.offsetWidth;
+    const setWidth = total * (cardWidth + gap);
 
-    const tl = gsap.timeline({ repeat: -1, repeatDelay: 0 });
+    // Initial position: start at 0
+    gsap.set(stripRef.current, { x: 0 });
 
-    tl.to(stripRef.current, {
-      x: `+=${-step}`,
-      duration: DURATION,
-      ease: EASE,
-      delay: AUTOPLAY_MS / 1000,
-      onComplete: () => {
-        indexRef.current += 1;
-        // if we've entered the last copy, silently snap back to middle copy
-        if (indexRef.current >= total * 2) {
-          indexRef.current = total;
-          gsap.set(stripRef.current, { x: -(indexRef.current * step) });
-        }
-      },
+    // Speed: 30 pixels per second (slow, smooth marquee)
+    const speed = 30;
+    const duration = setWidth / speed;
+
+    // Linear translation from x: 0 to x: -setWidth (right to left)
+    tweenRef.current = gsap.to(stripRef.current, {
+      x: -setWidth,
+      ease: "none",
+      duration: duration,
+      repeat: -1,
     });
 
-    tlRef.current = tl;
-  }, [total, tripled.length]);
+    // Respect hover state if already hovered when marquee starts
+    if (isHoveredRef.current) {
+      tweenRef.current.pause();
+    }
+  }, [total]);
 
-  /* ── initial setup ── */
+  const nudge = useCallback((direction: "prev" | "next") => {
+    if (!stripRef.current || total === 0 || isTransitioning.current) return;
+
+    isTransitioning.current = true;
+
+    // 1. Kill the active marquee tween
+    if (tweenRef.current) {
+      tweenRef.current.kill();
+    }
+
+    const card = stripRef.current.children[0] as HTMLElement | undefined;
+    if (!card) {
+      isTransitioning.current = false;
+      return;
+    }
+
+    const gap = parseInt(getComputedStyle(stripRef.current).gap || "24", 10);
+    const cardWidth = card.offsetWidth;
+    const step = cardWidth + gap;
+    const setWidth = total * (cardWidth + gap);
+
+    // 2. Get current X
+    const currentX = gsap.getProperty(stripRef.current, "x") as number;
+
+    // 3. Compute target X
+    let targetX = direction === "prev" ? currentX + step : currentX - step;
+    let fromX = currentX;
+
+    // 4. Wrap coordinates seamlessly
+    if (targetX > 0) {
+      fromX = currentX - setWidth;
+      targetX = targetX - setWidth;
+      gsap.set(stripRef.current, { x: fromX });
+    } else if (targetX < -setWidth) {
+      fromX = currentX + setWidth;
+      targetX = targetX + setWidth;
+      gsap.set(stripRef.current, { x: fromX });
+    }
+
+    // 5. Animate to the target
+    gsap.to(stripRef.current, {
+      x: targetX,
+      duration: 0.5,
+      ease: "power2.out",
+      onComplete: () => {
+        isTransitioning.current = false;
+
+        // 6. Resume marquee loop from the new position
+        const speed = 30; // base speed
+        const remainingDistance = -setWidth - targetX;
+        const remainingDuration = Math.abs(remainingDistance) / speed;
+
+        tweenRef.current = gsap.to(stripRef.current, {
+          x: -setWidth,
+          ease: "none",
+          duration: remainingDuration,
+          onComplete: () => {
+            // Once we reach the end of the loop, start standard marquee from x: 0
+            startMarquee();
+          }
+        });
+
+        // Respect hover state
+        if (isHoveredRef.current) {
+          tweenRef.current.pause();
+        }
+      }
+    });
+  }, [total, startMarquee]);
+
+  const handleMouseEnter = () => {
+    isHoveredRef.current = true;
+    if (!isTransitioning.current) {
+      tweenRef.current?.pause();
+    }
+  };
+
+  const handleMouseLeave = () => {
+    isHoveredRef.current = false;
+    if (!isTransitioning.current) {
+      tweenRef.current?.play();
+    }
+  };
+
   useEffect(() => {
-    measure();
-    buildTimeline();
+    // Wait for the DOM layout to complete before measuring
+    const timer = setTimeout(() => {
+      startMarquee();
+    }, 100);
 
     const onResize = () => {
-      measure();
-      buildTimeline();
+      startMarquee();
     };
+
     window.addEventListener("resize", onResize);
     return () => {
+      clearTimeout(timer);
       window.removeEventListener("resize", onResize);
-      tlRef.current?.kill();
+      if (tweenRef.current) {
+        tweenRef.current.kill();
+      }
     };
-  }, [measure, buildTimeline]);
-
-  /* ── manual navigation ── */
-  const navigate = useCallback(
-    (dir: 1 | -1) => {
-      if (!stripRef.current || total === 0) return;
-
-      // kill autoplay
-      tlRef.current?.kill();
-
-      const step = cardWidthRef.current + gapRef.current;
-      indexRef.current = Math.max(
-        total,
-        Math.min(total * 2 - 1, indexRef.current + dir),
-      );
-
-      gsap.to(stripRef.current, {
-        x: -(indexRef.current * step),
-        duration: DURATION,
-        ease: EASE,
-        onComplete: () => {
-          // restart autoplay after manual navigation
-          buildTimeline();
-        },
-      });
-    },
-    [total, buildTimeline],
-  );
+  }, [startMarquee]);
 
   if (total === 0) return null;
 
@@ -211,7 +256,11 @@ export default function Testimonials({ initialData }: TestimonialsProps) {
         </div>
 
         {/* ── Carousel viewport (clips overflow) ── */}
-        <div className="overflow-hidden">
+        <div
+          className="overflow-hidden py-4 -my-4 cursor-pointer"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           {/* Strip — rendered 3× for seamless loop */}
           <div
             ref={stripRef}
@@ -224,61 +273,24 @@ export default function Testimonials({ initialData }: TestimonialsProps) {
           </div>
         </div>
 
-        {/* ── Navigation buttons ── */}
-        <div className="flex items-center justify-center gap-4 mt-10">
+        {/* ── Dashboard Controls (Centered Nudge Buttons Only) ── */}
+        <div className="flex items-center justify-center gap-4 mt-12 pt-6 border-t border-slate-100 max-w-5xl mx-auto">
           <button
-            onClick={() => navigate(-1)}
-            aria-label="Previous testimonials"
-            className="
-              flex items-center justify-center
-              w-12 h-12 rounded-full
-              bg-[#0166A7] text-white
-              shadow-[0_4px_14px_rgba(1,102,167,0.35)]
-              hover:bg-[#004d7c] hover:scale-110
-              active:scale-95
-              transition-all duration-200
-            "
+            onClick={() => nudge("prev")}
+            className="flex items-center justify-center w-11 h-11 rounded-xl bg-white border border-slate-200 text-slate-600 shadow-sm hover:border-[#0166A7] hover:text-[#0166A7] active:scale-95 transition-all duration-150"
+            aria-label="Scroll left"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-
           <button
-            onClick={() => navigate(1)}
-            aria-label="Next testimonials"
-            className="
-              flex items-center justify-center
-              w-12 h-12 rounded-full
-              bg-[#0166A7] text-white
-              shadow-[0_4px_14px_rgba(1,102,167,0.35)]
-              hover:bg-[#004d7c] hover:scale-110
-              active:scale-95
-              transition-all duration-200
-            "
+            onClick={() => nudge("next")}
+            className="flex items-center justify-center w-11 h-11 rounded-xl bg-white border border-slate-200 text-slate-600 shadow-sm hover:border-[#0166A7] hover:text-[#0166A7] active:scale-95 transition-all duration-150"
+            aria-label="Scroll right"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 5l7 7-7 7"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
         </div>

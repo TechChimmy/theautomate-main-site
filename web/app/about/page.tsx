@@ -1,5 +1,6 @@
 'use client';
 
+import HomeCTA from '@/sections/HomeCTA';
 import dynamic from 'next/dynamic';
 // import Testimonials from "@/sections/Testimonials";
 
@@ -20,11 +21,7 @@ export default function AboutPage() {
             <Story />
             <MissionVision />
             <Unique />
-            <CTA
-                title="Start Learning Today"
-                description="Join the next wave of innovation. Your journey to mastering automation starts with a single click."
-                buttonText="Get The Course"
-            />
+            <HomeCTA />
         </main>
     );
 }
