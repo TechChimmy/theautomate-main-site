@@ -2,20 +2,33 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Clock, CheckCircle2, XCircle, LayoutList } from "lucide-react";
+import { Clock, LayoutList } from "lucide-react";
 import { StarRating } from "@/components/ui/StarRating";
+import { PlanFeatureList } from "@/components/ui/PlanFeatureList";
 import { urlFor } from "@/lib/sanity.client";
 import { Plan } from "@/lib/types/plan";
 
 interface PricingCardProps {
   bundle: Plan;
   courseSlug?: string;
+  /** Override the primary button label (legacy prop — still respected) */
   buttonLabel?: string;
+  /** Override the primary button href entirely (legacy prop — still respected) */
   buttonHref?: string;
   /** When true, shows a "Recommended" badge on the card */
   recommended?: boolean;
 }
 
+/**
+ * Plan card used on the course plans grid.
+ *
+ * Button behaviour per badge:
+ *  - Starter / Pro  → [View Plan]  [Buy Plan]
+ *  - Premium        → [View Plan]  (no Buy Plan)
+ *
+ * Passing buttonHref or buttonLabel overrides the Buy Plan button only
+ * (backward-compatible with callers that pass those props).
+ */
 export function PricingCard({
   bundle,
   courseSlug,
@@ -34,11 +47,10 @@ export function PricingCard({
   const normalizedBatch = bundle.batchOptions?.[0]
     ? bundle.batchOptions[0].toLowerCase().includes("weekday")
       ? "weekday"
-      : bundle.batchOptions[0].toLowerCase().includes("weekend")
-        ? "weekend"
-        : "weekend"
+      : "weekend"
     : "weekend";
 
+  // --- Payment URL (Buy Plan) ---
   const paymentParams = new URLSearchParams();
   if (courseSlug) paymentParams.set("course", courseSlug);
   paymentParams.set("bundleId", bundle._id);
@@ -46,21 +58,30 @@ export function PricingCard({
   paymentParams.set("amount", bundle.price.toString());
   paymentParams.set("batch", normalizedBatch);
   const paymentUrl = `/payment?${paymentParams.toString()}`;
-  const actionHref = buttonHref ?? paymentUrl;
-  const actionLabel = buttonLabel ?? "Choose Plan";
+  const buyHref = buttonHref ?? paymentUrl;
+  const buyLabel = buttonLabel ?? "Buy Plan";
+
+  // --- View Plan URL ---
+  const badgeSlug = bundle.badge.toLowerCase(); // "starter" | "pro" | "premium"
+  const viewPlanHref = courseSlug
+    ? `/courses/${courseSlug}/plans/${badgeSlug}`
+    : `/plans`; // graceful fallback when no courseSlug
+
+  const isPremium = badgeSlug === "premium";
 
   return (
-    <div className={`bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] overflow-hidden flex flex-col border transition-all duration-300 group relative
-      ${recommended ? "border-[#0166A7] ring-2 ring-[#0166A7]/30" : "border-slate-100"}`}>
-
-      {/* Recommended banner — only shown when flagged */}
+    <div
+      className={`bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] overflow-hidden flex flex-col border transition-all duration-300 group relative
+        ${recommended ? "border-[#0166A7] ring-2 ring-[#0166A7]/30" : "border-slate-100"}`}
+    >
+      {/* Recommended banner */}
       {recommended && (
         <div className="absolute top-0 left-0 right-0 z-10 bg-[#0166A7] text-white text-xs font-bold uppercase tracking-widest text-center py-1.5">
           ⭐ Recommended for this course
         </div>
       )}
 
-      {/* Image & Badge */}
+      {/* Cover image + badge chip */}
       <div className={`h-48 md:h-56 relative overflow-hidden ${recommended ? "mt-8" : ""}`}>
         <Image
           src={imageUrl}
@@ -73,7 +94,7 @@ export function PricingCard({
         </div>
       </div>
 
-      {/* Content */}
+      {/* Card body */}
       <div className="p-6 md:p-8 flex flex-col flex-grow">
         {/* Rating & Price */}
         <div className="flex items-center justify-between mb-4">
@@ -89,7 +110,7 @@ export function PricingCard({
         </h3>
         <p className="text-sm text-slate-500 mb-5">By Auto-Mate</p>
 
-        {/* Metadata */}
+        {/* Duration + batch metadata */}
         <div className="flex items-center gap-5 text-xs font-medium text-slate-600 mb-6">
           <div className="flex items-center gap-1.5">
             <Clock className="w-4 h-4 text-slate-400" />
@@ -101,40 +122,45 @@ export function PricingCard({
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="h-px bg-slate-100 w-full mb-6"></div>
+        <div className="h-px bg-slate-100 w-full mb-6" />
 
-        {/* Features List */}
-        <ul className="flex-grow space-y-3 mb-8">
-          {bundle.features?.map((feature, idx) => (
-            <li key={idx} className="flex items-start gap-2.5 text-sm">
-              {feature.included ? (
-                <CheckCircle2 className="w-5 h-5 text-[#0166A7] shrink-0" />
-              ) : (
-                <XCircle className="w-5 h-5 text-slate-300 shrink-0" />
-              )}
-              <span
-                className={
-                  feature.included
-                    ? "text-slate-700 font-medium"
-                    : "text-slate-400 line-through"
-                }
+        {/* Feature list — reuses extracted component */}
+        <div className="flex-grow mb-8">
+          <PlanFeatureList features={bundle.features ?? []} />
+        </div>
+
+        {/* Action buttons */}
+        {isPremium ? (
+          /* Premium: View Plan only */
+          <Link href={viewPlanHref} className="mt-auto">
+            <Button
+              variant="outline"
+              className="w-full rounded-full border-[#0166A7] text-[#0166A7] font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all"
+            >
+              View Plan
+            </Button>
+          </Link>
+        ) : (
+          /* Starter / Pro: View Plan + Buy Plan side by side */
+          <div className="mt-auto flex gap-3">
+            <Link href={viewPlanHref} className="flex-1">
+              <Button
+                variant="outline"
+                className="w-full rounded-full border-slate-300 text-slate-600 font-semibold py-6 hover:border-[#0166A7] hover:text-[#0166A7] transition-all"
               >
-                {feature.title}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        {/* Button */}
-        <Link href={actionHref} className="mt-auto">
-          <Button
-            variant="outline"
-            className="w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all"
-          >
-            {actionLabel}
-          </Button>
-        </Link>
+                View Plan
+              </Button>
+            </Link>
+            <Link href={buyHref} className="flex-1">
+              <Button
+                variant="outline"
+                className="w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all"
+              >
+                {buyLabel}
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
