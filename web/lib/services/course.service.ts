@@ -25,7 +25,7 @@ export interface CoursePlans {
 
 /**
  * Returns the course title + fully-dereferenced Plan documents from bundles[].
- * Used by /course-plans/[slug] — single query, no second fetch.
+ * Used by /courses/[slug]/plans — single query, no second fetch.
  */
 export async function getCoursePlans(slug: string): Promise<CoursePlans | null> {
   return client.fetch(COURSE_PLANS_QUERY, { slug });

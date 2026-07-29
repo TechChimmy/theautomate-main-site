@@ -195,7 +195,7 @@ export default function CourseCard({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            router.push(`/course-plans/${slug}`);
+            router.push(`/courses/${slug}/plans`);
           }}
         >
           View Plans

@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       customer_name,
       customer_email,
       customer_phone,
+      customer_comments,
     } = await req.json();
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -289,6 +290,8 @@ export async function POST(req: Request) {
         razorpay_signature,
         amount: amountPaise / 100, // Store in base currency (INR)
         status: "paid",
+        phone_number: customer_phone,
+        additional_comments: customer_comments,
       })
       .select("id")
       .single();

@@ -1,4 +1,5 @@
 import { defineType, defineField } from 'sanity'
+import { ProductSelectorInput } from '../components/ProductSelectorInput'
 
 export default defineType({
   name: 'courseDetails',
@@ -27,6 +28,9 @@ export default defineType({
       title: "Linked Product",
       type: "string",
       hidden: ({ parent }) => !parent?.useExistingProduct,
+      components: {
+        input: ProductSelectorInput,
+      },
     }),
 
     defineField({

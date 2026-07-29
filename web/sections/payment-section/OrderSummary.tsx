@@ -136,6 +136,7 @@ export default function OrderSummary({
               customer_name: userData.name,
               customer_email: userData.email,
               customer_phone: userData.phone,
+              customer_comments: userData.comments,
             }),
           });
 
