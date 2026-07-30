@@ -70,6 +70,4 @@ export interface Course {
   batchDetails: string[];
 
   bundles: Plan[];
-
-  _updatedAt?: string;
 }

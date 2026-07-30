@@ -2,13 +2,16 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Razorpay from "razorpay";
+import { transporter } from "@/lib/mailer";
+import { renderToStream } from "@react-pdf/renderer";
+import { InvoicePDF } from "@/components/pdf/InvoicePDF";
 
 // ---------------------------------------------------------------------------
 // Environment helpers
 // ---------------------------------------------------------------------------
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID!;
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET!;
-const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const LEARNING_PORTAL_URL =
   process.env.LEARNING_PORTAL_URL ?? "https://your-learning-portal.com";
@@ -356,6 +359,78 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
+    // 6.75. Send Invoice Email
+    // ------------------------------------------------------------------
+    try {
+      const pdfStream = await renderToStream(
+        <InvoicePDF 
+          invoiceNumber={String(order.id).split('-')[0].toUpperCase()}
+          date={new Date().toLocaleDateString()}
+          clientName={name || email.split("@")[0]}
+          clientPhone={customer_phone || "N/A"}
+          itemName={course_name || "Premium Course"}
+          amount={amountPaise / 100}
+        />
+      );
+
+      // Convert Node stream to Buffer for Nodemailer attachment
+      const chunks = [];
+      for await (const chunk of pdfStream) {
+        chunks.push(chunk);
+      }
+      const pdfBuffer = Buffer.concat(chunks);
+
+      await transporter.sendMail({
+        from: `"The Automate" <${process.env.ADMIN_EMAIL}>`,
+        to: email,
+        subject: `Invoice & Welcome to ${course_name || "Premium Plan"} - The Automate`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px;">
+            <h2 style="color: #174778;">Welcome to The Automate!</h2>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              Dear ${name || "Valued Student"},<br/><br/>
+              Thank you for choosing to learn with us! We are thrilled to welcome you to our community. Your payment for <strong>${course_name || "the course"}</strong> has been successfully processed, and your enrollment is now active.
+            </p>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              Please find your official tax invoice attached to this email for your records.
+            </p>
+            
+            <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #f3f4f6;">
+              <h3 style="margin-top: 0; color: #111827;">Order Summary</h3>
+              <p style="margin: 5px 0; color: #4b5563; font-size: 14px;"><strong>Order ID:</strong> ${razorpay_order_id}</p>
+              <p style="margin: 5px 0; color: #4b5563; font-size: 14px;"><strong>Amount Paid:</strong> ₹${amountPaise / 100}</p>
+              <p style="margin: 5px 0; color: #4b5563; font-size: 14px;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+            </div>
+
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              You can start your learning journey immediately by clicking the button below to access your portal.
+            </p>
+
+            <a href="${LEARNING_PORTAL_URL}/login" 
+               style="display: inline-block; background-color: #2283FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">
+              Access Learning Portal
+            </a>
+            
+            <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+              If you have any questions or need assistance, please feel free to reply to this email. We're here to help!<br/><br/>
+              Best regards,<br/>
+              <strong>The Automate Team</strong>
+            </p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `Invoice-${String(order.id).split('-')[0].toUpperCase()}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf'
+          }
+        ]
+      });
+    } catch (emailError) {
+      console.error("[verify-payment] Email sending failed:", emailError);
+    }
+
+    // ------------------------------------------------------------------
     // 7. Build redirect URL and respond
     // ------------------------------------------------------------------
     const redirectUrl = `${LEARNING_PORTAL_URL}/login?email=${encodeURIComponent(email)}`;
@@ -365,6 +440,7 @@ export async function POST(req: Request) {
         success: true,
         redirectUrl,
         isNewUser,
+        orderId: order.id,
         message: isNewUser
           ? "Account created successfully. Please log in with the default password."
           : "Payment recorded successfully.",

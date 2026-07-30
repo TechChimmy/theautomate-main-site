@@ -41,6 +41,8 @@ export default function OrderSummary({
     isOpen: boolean;
     status: "success" | "error" | "loading";
     message: string;
+    orderId?: string;
+    redirectUrl?: string;
   }>({
     isOpen: false,
     status: "loading",
@@ -175,14 +177,16 @@ export default function OrderSummary({
               isOpen: true,
               status: "success",
               message: successMsg,
+              orderId: verifyData.orderId,
+              redirectUrl: verifyData.redirectUrl,
             });
 
-            // Redirect to the Learning Portal after a brief delay
-            if (verifyData.redirectUrl) {
-              setTimeout(() => {
-                window.location.href = verifyData.redirectUrl;
-              }, 2000);
-            }
+            // Removed auto-redirect so the user can click the "Download Invoice" button
+            // if (verifyData.redirectUrl) {
+            //   setTimeout(() => {
+            //     window.location.href = verifyData.redirectUrl;
+            //   }, 2000);
+            // }
           } else {
             setModal({
               isOpen: true,
@@ -340,6 +344,8 @@ export default function OrderSummary({
         isOpen={modal.isOpen}
         status={modal.status}
         message={modal.message}
+        orderId={modal.orderId}
+        redirectUrl={modal.redirectUrl}
         onClose={() => setModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>

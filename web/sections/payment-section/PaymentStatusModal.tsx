@@ -8,10 +8,12 @@ interface ModalProps {
     isOpen: boolean;
     status: 'success' | 'error' | 'loading';
     message: string;
+    orderId?: string;
+    redirectUrl?: string;
     onClose: () => void;
 }
 
-export default function PaymentStatusModal({ isOpen, status, message, onClose }: ModalProps) {
+export default function PaymentStatusModal({ isOpen, status, message, orderId, redirectUrl, onClose }: ModalProps) {
     if (!isOpen) return null;
 
     return (
@@ -59,13 +61,24 @@ export default function PaymentStatusModal({ isOpen, status, message, onClose }:
                     {status !== 'loading' && (
                         <div className="pt-4 flex flex-col gap-3">
                             {status === 'success' ? (
-                                <Button
-                                    onClick={() => window.location.href = '/courses'}
-                                    className="w-full bg-[#1B262C] hover:bg-gray-800 h-14 rounded-2xl font-bold shadow-lg"
-                                >
-                                    <Home className="w-5 h-5 mr-3" />
-                                    Go to Courses
-                                </Button>
+                                <>
+                                    <Button
+                                        onClick={() => window.location.href = redirectUrl || '/courses'}
+                                        className="w-full bg-[#1B262C] hover:bg-gray-800 h-14 rounded-2xl font-bold shadow-lg"
+                                    >
+                                        <Home className="w-5 h-5 mr-3" />
+                                        Go to Courses
+                                    </Button>
+                                    {orderId && (
+                                        <Button
+                                            onClick={() => window.open(`/api/invoice/${orderId}`, '_blank')}
+                                            variant="outline"
+                                            className="w-full h-14 rounded-2xl font-bold shadow-sm border-2 border-[#1B262C] text-[#1B262C] hover:bg-gray-50"
+                                        >
+                                            Download Invoice
+                                        </Button>
+                                    )}
+                                </>
                             ) : (
                                 <Button
                                     onClick={onClose}
