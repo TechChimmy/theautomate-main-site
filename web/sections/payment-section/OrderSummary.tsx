@@ -11,6 +11,7 @@ import PaymentStatusModal from "./PaymentStatusModal";
 interface SummaryProps {
   courseName: string;
   courseKey: string;
+  productUuid?: string;
   bundleTitle: string;
   customAmount: number;
   batch: string;
@@ -31,6 +32,7 @@ declare global {
 export default function OrderSummary({
   courseName,
   courseKey,
+  productUuid,
   bundleTitle,
   customAmount,
   batch,
@@ -132,6 +134,7 @@ export default function OrderSummary({
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               course_id: courseKey,
+              product_uuid: productUuid,
               course_name: courseName,
               bundle_id: bundleTitle,
               batch_type: batch,

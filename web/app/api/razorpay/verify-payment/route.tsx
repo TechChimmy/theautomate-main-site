@@ -55,6 +55,7 @@ export async function POST(req: Request) {
       customer_email,
       customer_phone,
       customer_comments,
+      product_uuid,
     } = await req.json();
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -126,15 +127,17 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
-    // 4. Upsert user in phase-2.users
+    // 3. User Resolution
     // ------------------------------------------------------------------
-    // Check if the user already exists
     const { data: existingUser, error: lookupError } = await supabase
       .from("users")
-      .select("id, email")
+      .select("id, email, auth_user_id")
       .eq("email", email)
       .maybeSingle();
 
+    let userId: string;
+    let authUserId: string | null = null;
+    
     if (lookupError) {
       console.error("[verify-payment] User lookup error:", lookupError);
       return NextResponse.json(
@@ -143,12 +146,10 @@ export async function POST(req: Request) {
       );
     }
 
-    let userId: string;
     const isNewUser = !existingUser;
 
     if (isNewUser) {
       // ---- Create Supabase Auth account first to get auth uid ----
-      let authUserId: string | null = null;
       let authErrorMessage = "Unknown auth error";
 
       try {
@@ -224,6 +225,7 @@ export async function POST(req: Request) {
       userId = newUser.id;
     } else {
       userId = existingUser.id;
+      authUserId = existingUser.auth_user_id;
     }
 
     // ------------------------------------------------------------------
@@ -238,10 +240,13 @@ export async function POST(req: Request) {
     
     // If not a UUID or didn't exist, try looking up by name or fallback
     if (!finalBundleId || finalBundleId.length !== 36) {
+      // Frontend often sends "Starter Plan" but DB has "Starter", so we match by the first word
+      const bundleKeyword = (bundle_id || "").split(" ")[0];
+      
       const { data: bundleData } = await supabase
         .from("bundles")
         .select("id")
-        .ilike("bundle_name", bundle_id || "")
+        .ilike("bundle_name", `%${bundleKeyword}%`)
         .limit(1)
         .maybeSingle();
       
@@ -253,21 +258,49 @@ export async function POST(req: Request) {
       }
     }
 
-    let finalCourseId = course_id;
-    // Check if course exists if it looks like a UUID
-    if (finalCourseId && finalCourseId.length === 36) {
-      const { data: cCheck } = await supabasePublic.from("maincourses").select("id").eq("id", finalCourseId).maybeSingle();
-      if (!cCheck) finalCourseId = null;
+    let finalCourseId = null;
+
+    // 1. Try resolving using the exact product_uuid mapped from Sanity
+    if (product_uuid) {
+      const requestedBatch = (batch_type || "weekday").toLowerCase();
+      const { data: mcData } = await supabasePublic
+        .from("maincourses")
+        .select("id, title")
+        .eq("product_id", product_uuid)
+        .eq("batch_type", requestedBatch);
+
+      if (mcData && mcData.length > 0) {
+        finalCourseId = mcData[0].id;
+      } else {
+        // Fallback to finding any course by product_id if exact batch_type misses
+        const { data: fallbackData } = await supabasePublic
+          .from("maincourses")
+          .select("id, title")
+          .eq("product_id", product_uuid)
+          .limit(1)
+          .maybeSingle();
+        if (fallbackData) finalCourseId = fallbackData.id;
+      }
     }
 
-    // If not a UUID or didn't exist, try looking up by name or fallback
-    if (!finalCourseId || finalCourseId.length !== 36) {
-      const lookupName = course_name || "Course 1";
+    // 2. If no product_uuid provided, check if course_id itself is a UUID
+    if (!finalCourseId && course_id && course_id.length === 36) {
+      const { data: cCheck } = await supabasePublic
+        .from("maincourses")
+        .select("id")
+        .eq("id", course_id)
+        .maybeSingle();
+      if (cCheck) finalCourseId = cCheck.id;
+    }
+
+    // 3. If still unresolved, try looking up by name or wildcard matching
+    if (!finalCourseId) {
+      const searchTerm = course_id || course_name || "Course";
       // Use limit(1) to avoid "multiple rows" error from maybeSingle
       const { data: courseData } = await supabasePublic
         .from("maincourses")
         .select("id")
-        .ilike("title", lookupName)
+        .ilike("title", `%${searchTerm}%`)
         .limit(1)
         .maybeSingle();
         
@@ -343,6 +376,7 @@ export async function POST(req: Request) {
       user_id: userId,
       order_id: order.id,
       course_id: finalCourseId,
+      product_id: product_uuid,
       bundle_id: finalBundleId,
       status: "active",
       batch_type: batch_type || req.headers.get("x-mock-batch") || "weekday",

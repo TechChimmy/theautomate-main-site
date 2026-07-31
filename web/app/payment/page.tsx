@@ -30,7 +30,7 @@ interface Props {
 }
 
 const COURSE_TITLE_QUERY = `
-  *[_type=="courseDetails" && slug.current==$slug][0]{ title }
+  *[_type=="courseDetails" && slug.current==$slug][0]{ title, productUuid }
 `;
 
 const PLAN_QUERY = `
@@ -65,7 +65,7 @@ export default async function PaymentPage({ searchParams }: Props) {
   const [courseData, planData] = await Promise.all([
     courseSlug
       ? client
-          .fetch<{ title: string } | null>(COURSE_TITLE_QUERY, {
+          .fetch<{ title: string; productUuid: string } | null>(COURSE_TITLE_QUERY, {
             slug: courseSlug,
           })
           .catch(() => null)
@@ -88,6 +88,7 @@ export default async function PaymentPage({ searchParams }: Props) {
         <PaymentPageClient
           courseSlug={courseSlug}
           courseTitle={courseTitle}
+          productUuid={courseData?.productUuid || ""}
           bundleId={bundleId}
           bundleTitle={resolvedTitle}
           bundlePrice={resolvedPrice}

@@ -10,6 +10,7 @@ import OrderSummary from "./OrderSummary";
 interface Props {
   courseSlug: string;
   courseTitle: string;
+  productUuid?: string;
   bundleId: string;
   bundleTitle: string;
   bundlePrice: number;
@@ -27,6 +28,7 @@ interface Props {
 export default function PaymentPageClient({
   courseSlug,
   courseTitle,
+  productUuid,
   bundleTitle,
   bundlePrice,
   batch: initialBatch,
@@ -189,6 +191,7 @@ export default function PaymentPageClient({
           <OrderSummary
             courseName={courseTitle}
             courseKey={courseSlug}
+            productUuid={productUuid}
             bundleTitle={bundleTitle}
             customAmount={bundlePrice}
             batch={batch}

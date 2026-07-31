@@ -30,7 +30,7 @@ export const supabase = createClient(
 )
 
 export interface LmsProduct {
-  product_uuid: string
+  id: string
   title: string
   thumbnail_url: string | null
   is_active: boolean
@@ -45,7 +45,7 @@ export async function fetchActiveProducts(): Promise<LmsProduct[]> {
 
   const {data, error} = await supabase
     .from('products')
-    .select('product_uuid, title, thumbnail_url, is_active')
+    .select('id, title, thumbnail_url, is_active')
     .eq('is_active', true)
     .order('title', {ascending: true})
 

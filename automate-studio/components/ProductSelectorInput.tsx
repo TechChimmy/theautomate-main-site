@@ -62,7 +62,7 @@ export function ProductSelectorInput(props: StringInputProps) {
 
       // If a product is selected, try to auto-populate heroImage
       if (selectedId && documentId) {
-        const product = products.find((p) => p.product_uuid === selectedId)
+        const product = products.find((p) => p.id === selectedId)
         if (product?.thumbnail_url) {
           setIsUploading(true)
           try {
@@ -151,7 +151,7 @@ export function ProductSelectorInput(props: StringInputProps) {
   }
 
   /* ── Selected product preview ── */
-  const selectedProduct = products.find((p) => p.product_uuid === value) ?? null
+  const selectedProduct = products.find((p) => p.id === value) ?? null
 
   return (
     <Stack space={3}>
@@ -167,7 +167,7 @@ export function ProductSelectorInput(props: StringInputProps) {
       >
         <option value="">— Select a product —</option>
         {products.map((product) => (
-          <option key={product.product_uuid} value={product.product_uuid}>
+          <option key={product.id} value={product.id}>
             {product.title}
           </option>
         ))}
@@ -205,7 +205,7 @@ export function ProductSelectorInput(props: StringInputProps) {
                 {selectedProduct.title}
               </Text>
               <Text muted size={1} style={{marginTop: 4}}>
-                UUID: {selectedProduct.product_uuid}
+                UUID: {selectedProduct.id}
               </Text>
             </Box>
           </Flex>
