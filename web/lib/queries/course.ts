@@ -25,6 +25,7 @@ export const COURSE_BY_SLUG_QUERY = `
   _id,
   title,
   "slug": slug.current,
+  productUuid,
   tagline,
   rating,
   students,

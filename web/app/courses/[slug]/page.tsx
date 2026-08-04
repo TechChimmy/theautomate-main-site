@@ -2,7 +2,9 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { PortableText } from "@portabletext/react";
 import { getCourseBySlug } from "@/lib/services/course.service";
+import { getCourseRating } from "@/lib/services/rating.service";
 import { urlFor } from "@/lib/sanity.client";
+import { StarRating } from "@/components/ui/StarRating";
 import ContactCTA from "@/sections/HomeCTA";
 import PlanSelector from "@/components/layout/PlanSelector";
 
@@ -14,13 +16,28 @@ interface Props {
 
 export default async function CoursePage({ params }: Props) {
   const { slug } = await params;
-  const course = await getCourseBySlug(slug);
 
+  // Fetch Sanity course data first — we need productUuid to fire the rating query.
+  // Both fetches are then made in parallel once productUuid is known.
+  const course = await getCourseBySlug(slug);
   if (!course) return notFound();
+
+  // Parallel fetch: Supabase live rating alongside any other async work.
+  // getCourseRating returns null on DB error (page still renders safely).
+  const liveRating = course.productUuid
+    ? await getCourseRating(course.productUuid)
+    : { averageRating: 0, totalReviews: 0 };
 
   const heroImageUrl = course.heroImage
     ? urlFor(course.heroImage).width(1200).url()
     : "/placeholder.png";
+
+  // Determine what to show in the rating area:
+  //   liveRating === null  → DB error  → show nothing (safe fallback)
+  //   totalReviews === 0   → no reviews yet
+  //   totalReviews > 0     → show stars + count
+  const hasReviews = liveRating !== null && liveRating.totalReviews > 0;
+  const ratingError = liveRating === null;
 
   return (
     <main>
@@ -28,15 +45,36 @@ export default async function CoursePage({ params }: Props) {
         <div className="max-w-7xl mx-auto">
           <h1 className="text-7xl font-bold text-center">{course.title}</h1>
 
-          <div className="mt-8 flex justify-center gap-8">
-            {course.rating != null && (
-              <div>⭐ {course.rating}</div>
+          <div className="mt-8 flex justify-center items-center gap-8 flex-wrap">
+            {/* Live rating from Supabase — replaces static course.rating */}
+            {!ratingError && (
+              <div className="flex items-center gap-2">
+                {hasReviews ? (
+                  <>
+                    <StarRating
+                      rating={liveRating!.averageRating}
+                      showNumber={false}
+                      size={20}
+                    />
+                    <span className="text-base font-semibold text-slate-700">
+                      {liveRating!.averageRating.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      ({liveRating!.totalReviews}{" "}
+                      {liveRating!.totalReviews === 1 ? "review" : "reviews"})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm text-slate-400">No reviews yet</span>
+                )}
+              </div>
             )}
+
             {course.students != null && (
-              <div>({course.students} students)</div>
+              <div className="text-slate-600">({course.students} students)</div>
             )}
             {course.instructorName && (
-              <div>{course.instructorName}</div>
+              <div className="text-slate-600">{course.instructorName}</div>
             )}
           </div>
         </div>
@@ -56,9 +94,7 @@ export default async function CoursePage({ params }: Props) {
             {/* Description */}
             {course.description && course.description.length > 0 && (
               <section>
-                <h2 className="text-4xl font-bold mb-6">
-                  About the Course
-                </h2>
+                <h2 className="text-4xl font-bold mb-6">About the Course</h2>
                 <div className="text-lg leading-9 prose prose-lg max-w-none">
                   <PortableText value={course.description} />
                 </div>

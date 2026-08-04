@@ -32,8 +32,14 @@ export interface Course {
   tagline: string;
 
   hoverDescription?: string;
-  
+
   _updatedAt?: string;
+
+  /**
+   * UUID linking this course to public.maincourses.product_id in Supabase.
+   * Used to fetch live learner ratings from public.course_ratings.
+   */
+  productUuid?: string | null;
 
   heroImage: any; // Sanity image object — use urlFor() to resolve
 
