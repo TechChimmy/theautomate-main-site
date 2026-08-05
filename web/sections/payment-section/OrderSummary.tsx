@@ -45,6 +45,7 @@ export default function OrderSummary({
     message: string;
     orderId?: string;
     redirectUrl?: string;
+    isExistingUser?: boolean;
   }>({
     isOpen: false,
     status: "loading",
@@ -172,9 +173,10 @@ export default function OrderSummary({
               // We don't block the success state if sync fails, but we log it
             }
 
-            const successMsg = verifyData.isNewUser
-              ? "Account created! Redirecting you to the Learning Portal..."
-              : "Payment verified! Redirecting you to the Learning Portal...";
+            const isExistingUser = Boolean(verifyData.existingUser);
+            const successMsg = isExistingUser
+              ? "Payment verified! Your new course access has been added. Please log in to continue."
+              : "Account created! Log in using the credentials sent to your email.";
 
             setModal({
               isOpen: true,
@@ -182,6 +184,7 @@ export default function OrderSummary({
               message: successMsg,
               orderId: verifyData.orderId,
               redirectUrl: verifyData.redirectUrl,
+              isExistingUser,
             });
 
             // Removed auto-redirect so the user can click the "Download Invoice" button
@@ -349,6 +352,7 @@ export default function OrderSummary({
         message={modal.message}
         orderId={modal.orderId}
         redirectUrl={modal.redirectUrl}
+        isExistingUser={modal.isExistingUser}
         onClose={() => setModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>

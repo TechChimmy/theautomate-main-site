@@ -127,7 +127,38 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
-    // 3. User Resolution
+    // 2.5. Role Gate — block admins and mentors/instructors from purchasing
+    // ------------------------------------------------------------------
+    // Check profiles table (covers anyone with a portal account).
+    const { data: existingProfile } = await supabasePublic
+      .from("profiles")
+      .select("role")
+      .eq("email", email)
+      .maybeSingle();
+
+    const blockedRoles = ["admin", "instructor"];
+    const profileRole = existingProfile?.role?.toLowerCase() ?? "";
+
+    if (blockedRoles.includes(profileRole)) {
+      console.warn(`[verify-payment] Blocked purchase attempt by ${profileRole}: ${email}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `This email is registered as a ${profileRole} on the platform and cannot purchase courses. Please contact support if this is an error.`,
+        },
+        { status: 403 },
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // 3. User Resolution — three-tier lookup
+    //
+    //  Tier 1: phase2.users    (full purchase/enrollment record)
+    //  Tier 2: profiles table  (auth account exists but no phase2 row yet)
+    //  Tier 3: create new      (truly first-time user)
+    //
+    // This prevents the "user already registered" error that occurs when
+    // someone has a Supabase Auth account (tier 2) but never purchased before.
     // ------------------------------------------------------------------
     const { data: existingUser, error: lookupError } = await supabase
       .from("users")
@@ -137,7 +168,8 @@ export async function POST(req: Request) {
 
     let userId: string;
     let authUserId: string | null = null;
-    
+    let isNewUser: boolean;
+
     if (lookupError) {
       console.error("[verify-payment] User lookup error:", lookupError);
       return NextResponse.json(
@@ -146,39 +178,110 @@ export async function POST(req: Request) {
       );
     }
 
-    const isNewUser = !existingUser;
+    if (existingUser) {
+      // ── Tier 1: user exists in phase2.users ──────────────────────────
+      userId = existingUser.id;
+      authUserId = existingUser.auth_user_id;
+      isNewUser = false;
+    } else {
+      // Not in phase2.users — check profiles (auth-only accounts)
+      const { data: existingProfile } = await supabasePublic
+        .from("profiles")
+        .select("id, email")
+        .eq("email", email)
+        .maybeSingle();
 
-    if (isNewUser) {
-      // ---- Create Supabase Auth account first to get auth uid ----
-      let authErrorMessage = "Unknown auth error";
+      if (existingProfile) {
+        // ── Tier 2: auth account exists, phase2.users row is missing ───
+        // Recover their auth ID and create the missing phase2 record.
+        console.log("[verify-payment] Tier-2 user found in profiles, backfilling phase2.users for:", email);
+        authUserId = existingProfile.id; // profiles.id === auth user UUID
 
-      try {
-        const { data: authData, error: authError } =
-          await supabase.auth.admin.createUser({
+        const { data: backfilledUser, error: backfillError } = await supabase
+          .from("users")
+          .insert({
             email,
-            password: DEFAULT_PASSWORD,
-            email_confirm: true, // Auto-confirm so they can log in immediately
-            user_metadata: { full_name: name ?? "" },
-          });
+            username: name || email.split("@")[0],
+            auth_user_id: authUserId,
+            role: "user",
+          })
+          .select("id")
+          .single();
 
-        if (authError) {
-          authErrorMessage = authError.message || JSON.stringify(authError);
-          console.error(
-            "[verify-payment] Auth account creation error:",
-            authError,
+        if (backfillError || !backfilledUser) {
+          console.error("[verify-payment] Backfill phase2.users error:", backfillError);
+          return NextResponse.json(
+            { success: false, error: `Failed to sync user record: ${backfillError?.message || JSON.stringify(backfillError)}` },
+            { status: 500 },
           );
-        } else {
-          authUserId = authData.user.id;
         }
-      } catch (authErr: any) {
-        authErrorMessage = authErr?.message || String(authErr);
-        console.error(
-          "[verify-payment] Unexpected auth creation error:",
-          authErr,
-        );
-      }
 
-      if (authUserId) {
+        userId = backfilledUser.id;
+        isNewUser = false; // Has existing auth credentials → redirect to /login?message=
+      } else {
+        // ── Tier 3: attempt to create a brand-new auth account ──────────
+        // If createUser returns "already registered", we recover the existing
+        // auth user via admin.listUsers() rather than hard-failing.
+        isNewUser = true;
+        let authErrorMessage = "Unknown auth error";
+        let authCreateFailed = false;
+
+        try {
+          const { data: authData, error: authError } =
+            await supabase.auth.admin.createUser({
+              email,
+              password: DEFAULT_PASSWORD,
+              email_confirm: true,
+              user_metadata: { full_name: name ?? "" },
+            });
+
+          if (authError) {
+            authErrorMessage = authError.message || JSON.stringify(authError);
+            const alreadyExists =
+              authError.message?.toLowerCase().includes("already") ||
+              authError.message?.toLowerCase().includes("registered") ||
+              authError.message?.toLowerCase().includes("email address has already");
+
+            if (alreadyExists) {
+              // ── Tier 3b: auth account exists but slipped past profile lookup ──
+              // Scan auth users to recover the existing auth UID.
+              console.log("[verify-payment] createUser blocked — recovering existing auth user for:", email);
+              const { data: usersPage } = await supabase.auth.admin.listUsers({
+                page: 1,
+                perPage: 1000,
+              });
+              const matched = usersPage?.users?.find(
+                (u) => u.email?.toLowerCase() === email.toLowerCase(),
+              );
+              if (matched) {
+                authUserId = matched.id;
+                isNewUser = false; // Has credentials already → redirect to /login?message=
+                console.log("[verify-payment] Recovered auth user ID:", authUserId);
+              } else {
+                authCreateFailed = true;
+              }
+            } else {
+              authCreateFailed = true;
+              console.error("[verify-payment] Auth account creation error:", authError);
+            }
+          } else {
+            authUserId = authData.user.id;
+          }
+        } catch (authErr: any) {
+          authErrorMessage = authErr?.message || String(authErr);
+          authCreateFailed = true;
+          console.error("[verify-payment] Unexpected auth creation error:", authErr);
+        }
+
+        if (!authUserId) {
+          // Failed to create OR recover an auth user — genuine failure
+          return NextResponse.json(
+            { success: false, error: authCreateFailed ? `Failed to create Supabase Auth account: ${authErrorMessage}` : "Could not resolve auth user. Please contact support." },
+            { status: 500 },
+          );
+        }
+
+        // Upsert profile (safe even if it already exists)
         const { error: profileError } = await supabasePublic
           .from("profiles")
           .upsert({
@@ -190,43 +293,36 @@ export async function POST(req: Request) {
           });
 
         if (profileError) {
-          console.error(
-            "[verify-payment] Profile insert error:",
-            profileError,
+          console.error("[verify-payment] Profile upsert error:", profileError);
+        }
+
+        // Upsert phase2.users (safe if it already exists due to a race or prior backfill)
+        const { data: upsertedUser, error: upsertUserError } = await supabase
+          .from("users")
+          .upsert(
+            {
+              email,
+              username: name || email.split("@")[0],
+              auth_user_id: authUserId,
+              role: "user",
+            },
+            { onConflict: "email" },
+          )
+          .select("id")
+          .single();
+
+        if (upsertUserError || !upsertedUser) {
+          console.error("[verify-payment] User upsert error:", upsertUserError);
+          return NextResponse.json(
+            { success: false, error: `Failed to create user record: ${upsertUserError?.message || JSON.stringify(upsertUserError)}` },
+            { status: 500 },
           );
         }
-      } else {
-        return NextResponse.json(
-          { success: false, error: `Failed to create Supabase Auth account: ${authErrorMessage}` },
-          { status: 500 },
-        );
+
+        userId = upsertedUser.id;
       }
-
-      // ---- Insert new user into phase-2.users ----
-      const { data: newUser, error: insertUserError } = await supabase
-        .from("users")
-        .insert({
-          email,
-          username: name || email.split("@")[0],
-          auth_user_id: authUserId,
-          role: "user",
-        })
-        .select("id")
-        .single();
-
-      if (insertUserError || !newUser) {
-        console.error("[verify-payment] User insert error:", insertUserError);
-        return NextResponse.json(
-          { success: false, error: `Failed to create user record: ${insertUserError?.message || JSON.stringify(insertUserError)}` },
-          { status: 500 },
-        );
-      }
-
-      userId = newUser.id;
-    } else {
-      userId = existingUser.id;
-      authUserId = existingUser.auth_user_id;
     }
+
 
     // ------------------------------------------------------------------
     // 4.5. Resolve UUIDs for Course and Bundle
@@ -414,16 +510,24 @@ export async function POST(req: Request) {
       }
       const pdfBuffer = Buffer.concat(chunks);
 
+      const emailSubject = isNewUser
+        ? `Invoice & Welcome to ${course_name || "Premium Plan"} - The Automate`
+        : `Your new course has been added — Invoice for ${course_name || "Premium Plan"} - The Automate`;
+
+      const emailIntro = isNewUser
+        ? `Thank you for choosing to learn with us! We are thrilled to welcome you to our community. Your payment for <strong>${course_name || "the course"}</strong> has been successfully processed, and your enrollment is now active.`
+        : `Great news! Your payment for <strong>${course_name || "the course"}</strong> has been successfully processed, and access has been added to your existing account. You can log in with your existing credentials to start learning right away.`;
+
       await transporter.sendMail({
         from: `"The Automate" <${process.env.ADMIN_EMAIL}>`,
         to: email,
-        subject: `Invoice & Welcome to ${course_name || "Premium Plan"} - The Automate`,
+        subject: emailSubject,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px;">
-            <h2 style="color: #174778;">Welcome to The Automate!</h2>
+            <h2 style="color: #174778;">${isNewUser ? "Welcome to The Automate!" : "New Course Access Added!"}</h2>
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
               Dear ${name || "Valued Student"},<br/><br/>
-              Thank you for choosing to learn with us! We are thrilled to welcome you to our community. Your payment for <strong>${course_name || "the course"}</strong> has been successfully processed, and your enrollment is now active.
+              ${emailIntro}
             </p>
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
               Please find your official tax invoice attached to this email for your records.
@@ -437,7 +541,7 @@ export async function POST(req: Request) {
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-              You can start your learning journey immediately by clicking the button below to access your portal.
+              Click the button below to access your learning portal.
             </p>
 
             <a href="${LEARNING_PORTAL_URL}/login" 
@@ -467,17 +571,22 @@ export async function POST(req: Request) {
     // ------------------------------------------------------------------
     // 7. Build redirect URL and respond
     // ------------------------------------------------------------------
-    const redirectUrl = `${LEARNING_PORTAL_URL}/login?email=${encodeURIComponent(email)}`;
+    // New users: /login?email=...&newUser=true triggers auto-login with the default password.
+    // Existing users: /login?message=... shows an informational toast only.
+    const redirectUrl = isNewUser
+      ? `${LEARNING_PORTAL_URL}/login?email=${encodeURIComponent(email)}&newUser=true`
+      : `${LEARNING_PORTAL_URL}/login?message=${encodeURIComponent("Account exists. Please log in with your existing password to access your new course.")}&email=${encodeURIComponent(email)}`;
 
     return NextResponse.json(
       {
         success: true,
         redirectUrl,
         isNewUser,
+        existingUser: !isNewUser,
         orderId: order.id,
         message: isNewUser
-          ? "Account created successfully. Please log in with the default password."
-          : "Payment recorded successfully.",
+          ? "Account created successfully. Check your email for login instructions."
+          : "Payment recorded. Your new course has been added to your existing account.",
       },
       { status: 200 },
     );
