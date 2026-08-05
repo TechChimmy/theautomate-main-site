@@ -12,10 +12,11 @@ function formatCourseName(courseSlug?: string) {
 export default async function PlansPage({
   searchParams,
 }: {
-  searchParams?: { course?: string };
+  searchParams?: Promise<{ course?: string; email?: string; name?: string; phone?: string }>;
 }) {
+  const params = await searchParams;
   const plans = await getPlans().catch(() => []);
-  const courseName = formatCourseName(searchParams?.course);
+  const courseName = formatCourseName(params?.course);
 
   return (
     <main className="bg-white">
@@ -43,7 +44,10 @@ export default async function PlansPage({
                 <PricingCard
                   key={plan._id}
                   bundle={plan}
-                  courseSlug={searchParams?.course}
+                  courseSlug={params?.course}
+                  userEmail={params?.email}
+                  userName={params?.name}
+                  userPhone={params?.phone}
                 />
               ))
             ) : (

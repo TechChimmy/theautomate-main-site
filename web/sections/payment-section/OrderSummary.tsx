@@ -21,6 +21,7 @@ interface SummaryProps {
     phone: string;
     comments: string;
   };
+  targetBundlePrice?: number;
 }
 
 declare global {
@@ -35,6 +36,7 @@ export default function OrderSummary({
   productUuid,
   bundleTitle,
   customAmount,
+  targetBundlePrice,
   batch,
   userData,
 }: SummaryProps) {
@@ -80,8 +82,11 @@ export default function OrderSummary({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           courseKey,
+          productUuid,
           bundleTitle,
           amount: finalPrice,
+          email: userData.email,
+          targetBundlePrice: targetBundlePrice || customAmount 
         }),
       });
 

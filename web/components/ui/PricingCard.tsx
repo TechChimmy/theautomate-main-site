@@ -17,6 +17,9 @@ interface PricingCardProps {
   buttonHref?: string;
   /** When true, shows a "Recommended" badge on the card */
   recommended?: boolean;
+  userEmail?: string;
+  userName?: string;
+  userPhone?: string;
 }
 
 /**
@@ -35,6 +38,9 @@ export function PricingCard({
   buttonLabel,
   buttonHref,
   recommended = false,
+  userEmail,
+  userName,
+  userPhone,
 }: PricingCardProps) {
   const imageUrl = bundle.coverImage
     ? urlFor(bundle.coverImage).width(800).url()
@@ -53,6 +59,9 @@ export function PricingCard({
   // --- Payment URL (Buy Plan) ---
   const paymentParams = new URLSearchParams();
   if (courseSlug) paymentParams.set("course", courseSlug);
+  if (userEmail) paymentParams.set("email", userEmail);
+  if (userName) paymentParams.set("name", userName);
+  if (userPhone) paymentParams.set("phone", userPhone);
   paymentParams.set("bundleId", bundle._id);
   paymentParams.set("bundleTitle", bundle.title);
   paymentParams.set("amount", bundle.price.toString());

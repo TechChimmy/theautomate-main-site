@@ -409,6 +409,23 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
+    // 4.5. Ensure product_uuid is actually a product ID, not a course ID
+    // ------------------------------------------------------------------
+    let finalProductUuid = product_uuid;
+    if (finalProductUuid && finalProductUuid.length === 36) {
+      // Check if it's actually a course ID mistakenly passed as product_uuid
+      const { data: isCourse } = await supabasePublic
+        .from("maincourses")
+        .select("product_id")
+        .eq("id", finalProductUuid)
+        .maybeSingle();
+      
+      if (isCourse && isCourse.product_id) {
+        finalProductUuid = isCourse.product_id;
+      }
+    }
+
+    // ------------------------------------------------------------------
     // 5. Create order in phase-2.orders
     // ------------------------------------------------------------------
     const { data: order, error: orderError } = await supabase
@@ -468,17 +485,38 @@ export async function POST(req: Request) {
     const accessEndDate = new Date();
     accessEndDate.setFullYear(accessEndDate.getFullYear() + 1); // 1 year access by default
     
-    const { error: enrollmentError } = await supabase.from("enrollments").insert({
-      user_id: userId,
-      order_id: order.id,
-      course_id: finalCourseId,
-      product_id: product_uuid,
-      bundle_id: finalBundleId,
-      status: "active",
-      batch_type: batch_type || req.headers.get("x-mock-batch") || "weekday",
-      access_start_date: accessStartDate.toISOString(),
-      access_end_date: accessEndDate.toISOString(),
-    });
+    const { data: existingEnrollment } = await supabase
+      .from("enrollments")
+      .select("id, access_start_date")
+      .eq("user_id", userId)
+      .eq("course_id", finalCourseId)
+      .maybeSingle();
+
+    let enrollmentError;
+    
+    if (existingEnrollment) {
+      const { error } = await supabase.from("enrollments").update({
+        order_id: order.id,
+        product_id: finalProductUuid,
+        bundle_id: finalBundleId,
+        status: "active",
+        batch_type: batch_type || req.headers.get("x-mock-batch") || "weekday",
+      }).eq("id", existingEnrollment.id);
+      enrollmentError = error;
+    } else {
+      const { error } = await supabase.from("enrollments").insert({
+        user_id: userId,
+        order_id: order.id,
+        course_id: finalCourseId,
+        product_id: finalProductUuid,
+        bundle_id: finalBundleId,
+        status: "active",
+        batch_type: batch_type || req.headers.get("x-mock-batch") || "weekday",
+        access_start_date: accessStartDate.toISOString(),
+        access_end_date: accessEndDate.toISOString(),
+      });
+      enrollmentError = error;
+    }
 
     if (enrollmentError) {
       console.error("[verify-payment] Enrollment insert error:", enrollmentError);
