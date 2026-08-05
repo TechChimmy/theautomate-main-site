@@ -36,10 +36,10 @@ export default function PaymentPageClient({
   initialEmail,
   initialPhone,
 }: Props) {
-  const [batch,    setBatch]    = useState(initialBatch);
-  const [name,     setName]     = useState(initialName);
-  const [email,    setEmail]    = useState(initialEmail);
-  const [phone,    setPhone]    = useState(initialPhone);
+  const [batch, setBatch] = useState(initialBatch);
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const [phone, setPhone] = useState(initialPhone);
   const [comments, setComments] = useState("");
 
   const [finalPrice, setFinalPrice] = useState(bundlePrice);
@@ -49,7 +49,7 @@ export default function PaymentPageClient({
 
   const [resolvedProductUuid, setResolvedProductUuid] = useState(productUuid);
   const [resolvedCourseTitle, setResolvedCourseTitle] = useState(courseTitle);
-  const [isPhoneAutofilled, setIsPhoneAutofilled] = useState(!!phoneParam);
+  const [isPhoneAutofilled, setIsPhoneAutofilled] = useState(!!initialPhone);
 
   useEffect(() => {
     // Only check if it's a valid looking email and they are trying to buy Pro/Premium
@@ -133,7 +133,7 @@ export default function PaymentPageClient({
               </div>
               <h2 className="text-xl font-bold text-[#0A3D62]">Your Selection</h2>
             </div>
-            
+
             <AnimatePresence>
               {isUpgradeEligible && (
                 <motion.div
@@ -148,7 +148,7 @@ export default function PaymentPageClient({
                   <div>
                     <h4 className="font-bold text-blue-900 text-sm">Special Upgrade Offer Available!</h4>
                     <p className="text-xs text-blue-700 mt-1">
-                      Since you purchased the Starter plan recently, you can upgrade to {bundleTitle} for just ₹{finalPrice.toLocaleString("en-IN")}. 
+                      Since you purchased the Starter plan recently, you can upgrade to {bundleTitle} for just ₹{finalPrice.toLocaleString("en-IN")}.
                       {timeRemaining !== null && ` Offer expires in ~${timeRemaining} hours.`}
                     </p>
                   </div>
