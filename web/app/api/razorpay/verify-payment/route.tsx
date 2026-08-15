@@ -542,9 +542,9 @@ export async function POST(req: Request) {
       );
 
       // Convert Node stream to Buffer for Nodemailer attachment
-      const chunks = [];
-      for await (const chunk of pdfStream) {
-        chunks.push(chunk);
+      const chunks: Buffer[] = [];
+      for await (const chunk of pdfStream as AsyncIterable<Uint8Array | string | Buffer>) {
+        chunks.push(Buffer.from(chunk));
       }
       const pdfBuffer = Buffer.concat(chunks);
 
