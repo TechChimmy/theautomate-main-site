@@ -171,21 +171,6 @@ export default function PaymentDetails({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold text-gray-700">
-              Batch Type
-            </Label>
-            <Select value={batch} onValueChange={setBatch}>
-              <SelectTrigger className="h-12 rounded-xl bg-white">
-                <SelectValue placeholder="Select Batch" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="weekday">Weekday (Mon-Fri)</SelectItem>
-                <SelectItem value="weekend">Weekend (Sat-Sun)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="sm:col-span-2 space-y-2">
             <Label
               htmlFor="payment-amount"

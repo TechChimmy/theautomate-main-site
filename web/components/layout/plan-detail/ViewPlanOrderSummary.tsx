@@ -15,8 +15,8 @@ interface ViewPlanOrderSummaryProps {
 
 /**
  * Right column for Starter / Pro plan detail pages.
- * Shows a mini order summary and lets the user pick a batch,
- * then redirects to the existing /payment page — no Razorpay logic here.
+ * Shows a mini order summary and redirects to the existing /payment page.
+ * All course access is self-paced and recorded-video based.
  */
 export function ViewPlanOrderSummary({
   plan,
@@ -25,20 +25,12 @@ export function ViewPlanOrderSummary({
 }: ViewPlanOrderSummaryProps) {
   const router = useRouter();
 
-  const defaultBatch =
-    plan.batchOptions?.[0]?.toLowerCase().includes("weekday")
-      ? "weekday"
-      : "weekend";
-
-  const [batch, setBatch] = useState(defaultBatch);
-
   const handleProceed = () => {
     const params = new URLSearchParams();
     params.set("course", courseSlug);
     params.set("bundleId", plan._id);
     params.set("bundleTitle", plan.title);
     params.set("amount", plan.price.toString());
-    params.set("batch", batch);
     router.push(`/payment?${params.toString()}`);
   };
 
@@ -59,31 +51,10 @@ export function ViewPlanOrderSummary({
               {courseTitle}
             </h3>
             <p className="text-sm text-slate-500">{plan.title}</p>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-md w-fit">
-              <Clock className="w-3.5 h-3.5 text-[#1E90FF]" />
-              <span className="text-xs font-semibold text-[#1E90FF] capitalize">
-                {batch} Batch
-              </span>
-            </div>
           </div>
           <span className="font-bold text-xl text-[#0A3D62] whitespace-nowrap">
             ₹{plan.price.toLocaleString("en-IN")}
           </span>
-        </div>
-
-        {/* Batch selector */}
-        <div className="space-y-2">
-          <Label className="text-sm font-semibold text-gray-700">
-            Batch Type
-          </Label>
-          <select
-            value={batch}
-            onChange={(e) => setBatch(e.target.value)}
-            className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1E90FF] transition"
-          >
-            <option value="weekday">Weekday (Mon–Fri)</option>
-            <option value="weekend">Weekend (Sat–Sun)</option>
-          </select>
         </div>
 
         {/* Pricing rows */}

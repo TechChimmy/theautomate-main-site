@@ -86,7 +86,7 @@ export default function OrderSummary({
           bundleTitle,
           amount: finalPrice,
           email: userData.email,
-          targetBundlePrice: targetBundlePrice || customAmount 
+          targetBundlePrice: targetBundlePrice || customAmount,
         }),
       });
 
@@ -143,7 +143,7 @@ export default function OrderSummary({
               product_uuid: productUuid,
               course_name: courseName,
               bundle_id: bundleTitle,
-              batch_type: batch,
+              batch_type: "recorded",
               customer_name: userData.name,
               customer_email: userData.email,
               customer_phone: userData.phone,

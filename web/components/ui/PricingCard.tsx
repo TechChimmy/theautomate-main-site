@@ -46,15 +46,7 @@ export function PricingCard({
     ? urlFor(bundle.coverImage).width(800).url()
     : "/placeholder.png";
 
-  const batchLabel = bundle.batchOptions?.length
-    ? bundle.batchOptions.join(" or ")
-    : "Weekday or Weekend";
-
-  const normalizedBatch = bundle.batchOptions?.[0]
-    ? bundle.batchOptions[0].toLowerCase().includes("weekday")
-      ? "weekday"
-      : "weekend"
-    : "weekend";
+  const batchLabel = "Recorded Video Access";
 
   // --- Payment URL (Buy Plan) ---
   const paymentParams = new URLSearchParams();
@@ -65,7 +57,6 @@ export function PricingCard({
   paymentParams.set("bundleId", bundle._id);
   paymentParams.set("bundleTitle", bundle.title);
   paymentParams.set("amount", bundle.price.toString());
-  paymentParams.set("batch", normalizedBatch);
   const paymentUrl = `/payment?${paymentParams.toString()}`;
   const buyHref = buttonHref ?? paymentUrl;
   const buyLabel = buttonLabel ?? "Buy Plan";
@@ -91,7 +82,9 @@ export function PricingCard({
       )}
 
       {/* Cover image + badge chip */}
-      <div className={`h-48 md:h-56 relative overflow-hidden ${recommended ? "mt-8" : ""}`}>
+      <div
+        className={`h-48 md:h-56 relative overflow-hidden ${recommended ? "mt-8" : ""}`}
+      >
         <Image
           src={imageUrl}
           alt={bundle.title}

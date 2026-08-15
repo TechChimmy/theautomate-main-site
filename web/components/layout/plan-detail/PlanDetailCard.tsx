@@ -14,9 +14,7 @@ interface PlanDetailCardProps {
  * Server-renderable — no client-side state.
  */
 export function PlanDetailCard({ plan }: PlanDetailCardProps) {
-  const batchLabel = plan.batchOptions?.length
-    ? plan.batchOptions.join(" or ")
-    : "Weekday or Weekend";
+  const batchLabel = "Recorded Video Access";
 
   return (
     <div className="bg-white rounded-[24px] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 md:p-10 flex flex-col gap-6">

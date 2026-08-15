@@ -7,7 +7,7 @@ import PaymentPageClient from "@/sections/payment-section/PaymentPageClient";
  * from Sanity, then passes resolved data to the client-side form/checkout.
  *
  * URL shape (built by PricingCard):
- *   /payment?course=<courseSlug>&bundleId=<planId>&bundleTitle=...&amount=...&batch=...
+ *   /payment?course=<courseSlug>&bundleId=<planId>&bundleTitle=...&amount=...
  */
 
 interface SearchParams {
@@ -56,7 +56,7 @@ export default async function PaymentPage({ searchParams }: Props) {
   const bundleId = params.bundleId ?? params.planId ?? "";
   const bundleTitle = params.bundleTitle ?? params.planName ?? "";
   const amount = Number(params.amount ?? params.planPrice ?? 0);
-  const batch = params.batch ?? "weekend";
+  const batch = params.batch ?? "recorded";
   const name = params.name ?? "";
   const email = params.email ?? "";
   const phone = params.phone ?? "";
@@ -65,9 +65,12 @@ export default async function PaymentPage({ searchParams }: Props) {
   const [courseData, planData] = await Promise.all([
     courseSlug
       ? client
-          .fetch<{ title: string; productUuid: string } | null>(COURSE_TITLE_QUERY, {
-            slug: courseSlug,
-          })
+          .fetch<{ title: string; productUuid: string } | null>(
+            COURSE_TITLE_QUERY,
+            {
+              slug: courseSlug,
+            },
+          )
           .catch(() => null)
       : Promise.resolve(null),
     bundleId
