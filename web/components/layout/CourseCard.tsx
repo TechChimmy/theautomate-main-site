@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Star, Check } from "lucide-react";
+import { addToCart } from "@/lib/services/cart";
+import { Button } from "../ui/button";
 
 interface CourseCardProps {
   slug: string;
@@ -52,6 +54,20 @@ export default function CourseCard({
 
   const isRightEdge = index !== undefined && (index + 1) % 3 === 0;
 
+  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart({
+      productId: slug,
+      productTitle: title,
+      productSlug: slug,
+      thumbnailUrl: heroImageUrl ?? null,
+      selectedPlanId: null,
+      selectedPlanTitle: null,
+      selectedPlanPrice: null,
+    });
+  };
+
   // Format the updated date (e.g. "June 2026")
   let formattedDate = "";
   if (updatedAt) {
@@ -80,9 +96,10 @@ export default function CourseCard({
   const displayHours = hours || 12;
 
   return (
-    <Link
-      href={`/courses/${slug}`}
+    <div
+      onClick={() => router.push(`/courses/${slug}`)}
       className="
+        cursor-pointer
         group relative flex flex-col bg-white rounded-[24px]
         border border-slate-200
         hover:shadow-xl
@@ -190,17 +207,27 @@ export default function CourseCard({
           )}
         </div>
 
-        <button
-          className="mt-4 w-full bg-brand-blue hover:bg-brand-dark text-white text-lg font-bold py-4 rounded-xl transition-colors shrink-0"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            router.push(`/courses/${slug}/plans`);
-          }}
-        >
-          View Plans
-        </button>
+        <div className="mt-4 flex gap-2 w-full">
+          <button
+            className="flex-1 bg-brand-blue hover:bg-brand-dark text-white text-base md:text-lg font-bold py-3 md:py-4 rounded-xl transition-colors shrink-0"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(`/courses/${slug}/plans`);
+            }}
+          >
+            View Plans
+          </button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 text-base md:text-lg font-bold h-auto py-3 md:py-4 rounded-xl shrink-0"
+            onClick={handleAddToCart}
+          >
+            Add to Cart
+          </Button>
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }
