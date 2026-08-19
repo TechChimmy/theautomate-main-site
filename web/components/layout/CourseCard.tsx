@@ -4,8 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Star, Check } from "lucide-react";
-import { addToCart } from "@/lib/services/cart";
+import { addToCart, removeFromCart, getCart } from "@/lib/services/cart";
 import { Button } from "../ui/button";
+import { useEffect, useState } from "react";
 
 interface CourseCardProps {
   slug: string;
@@ -45,6 +46,31 @@ export default function CourseCard({
   hoverDescription,
 }: CourseCardProps) {
   const router = useRouter();
+  const [isInCart, setIsInCart] = useState(false);
+
+  useEffect(() => {
+    const checkCart = () => {
+      const cart = getCart();
+      setIsInCart(cart.some(item => item.productId === slug));
+    };
+
+    // Initial check
+    checkCart();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "automate-learning-cart") {
+        checkCart();
+      }
+    };
+
+    window.addEventListener("cart-updated", checkCart);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("cart-updated", checkCart);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [slug]);
 
   // The user requested to not have the instructor's name below the title.
   const subtitle = tagline;
@@ -57,15 +83,20 @@ export default function CourseCard({
   const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart({
-      productId: slug,
-      productTitle: title,
-      productSlug: slug,
-      thumbnailUrl: heroImageUrl ?? null,
-      selectedPlanId: null,
-      selectedPlanTitle: null,
-      selectedPlanPrice: null,
-    });
+    
+    if (isInCart) {
+      removeFromCart(slug);
+    } else {
+      addToCart({
+        productId: slug,
+        productTitle: title,
+        productSlug: slug,
+        thumbnailUrl: heroImageUrl ?? null,
+        selectedPlanId: null,
+        selectedPlanTitle: null,
+        selectedPlanPrice: null,
+      });
+    }
   };
 
   // Format the updated date (e.g. "June 2026")
@@ -220,11 +251,13 @@ export default function CourseCard({
           </button>
           <Button
             type="button"
-            variant="outline"
-            className="flex-1 text-base md:text-lg font-bold h-auto py-3 md:py-4 rounded-xl shrink-0"
+            variant={isInCart ? "default" : "outline"}
+            className={`flex-1 text-base md:text-lg font-bold h-auto py-3 md:py-4 rounded-xl shrink-0 transition-colors ${
+              isInCart ? "bg-green-600 hover:bg-green-700 text-white border-transparent" : ""
+            }`}
             onClick={handleAddToCart}
           >
-            Add to Cart
+            {isInCart ? "Added to cart" : "Add to Cart"}
           </Button>
         </div>
       </div>
