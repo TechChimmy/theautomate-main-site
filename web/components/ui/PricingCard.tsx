@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,7 @@ import { StarRating } from "@/components/ui/StarRating";
 import { PlanFeatureList } from "@/components/ui/PlanFeatureList";
 import { urlFor } from "@/lib/sanity.client";
 import { Plan } from "@/lib/types/plan";
+import { addToCart, removeFromCart, getCart } from "@/lib/services/cart";
 
 interface PricingCardProps {
   bundle: Plan;
@@ -47,6 +50,49 @@ export function PricingCard({
     : "/placeholder.png";
 
   const batchLabel = "Recorded Video Access";
+
+  const [isInCart, setIsInCart] = useState(false);
+
+  useEffect(() => {
+    const checkCart = () => {
+      const cart = getCart();
+      setIsInCart(cart.some(item => item.productId === bundle._id));
+    };
+
+    // Initial check
+    checkCart();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "automate-learning-cart") {
+        checkCart();
+      }
+    };
+
+    window.addEventListener("cart-updated", checkCart);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("cart-updated", checkCart);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [bundle._id]);
+
+  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (isInCart) {
+      removeFromCart(bundle._id);
+    } else {
+      addToCart({
+        productId: bundle._id,
+        productTitle: bundle.title,
+        productSlug: courseSlug ?? bundle._id,
+        thumbnailUrl: bundle.coverImage ? urlFor(bundle.coverImage).width(800).url() : null,
+        selectedPlanId: bundle._id,
+        selectedPlanTitle: bundle.title,
+        selectedPlanPrice: bundle.price,
+      });
+    }
+  };
 
   // --- Payment URL (Buy Plan) ---
   const paymentParams = new URLSearchParams();
@@ -153,14 +199,17 @@ export function PricingCard({
                 View Plan
               </Button>
             </Link>
-            <Link href={buyHref} className="flex-1">
+            <div className="flex-1">
               <Button
                 variant="outline"
-                className="w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all"
+                onClick={handleAddToCart}
+                className={`w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all ${
+                  isInCart ? "bg-green-600 hover:bg-green-700 text-white border-transparent" : ""
+                }`}
               >
-                {buyLabel}
+                {isInCart ? "Added to cart" : "Add to Cart"}
               </Button>
-            </Link>
+            </div>
           </div>
         )}
       </div>

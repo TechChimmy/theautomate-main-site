@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { ShoppingCart } from 'lucide-react';
+import { getCart } from "@/lib/services/cart";
 
 const navLinks = [
   { name: "Home", href: "/" },
@@ -28,6 +29,7 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
+  const [cartCount, setCartCount] = useState(0);
 
   const lastScrollY = useRef(0);
   const navRef = useRef<HTMLDivElement>(null);
@@ -127,6 +129,13 @@ export default function Navbar() {
     };
   }, [isVisible, scrolled, defaultIndex, pathname, moveIndicator]);
 
+  useEffect(() => {
+    const updateCount = () => setCartCount(getCart().length);
+    updateCount();
+    window.addEventListener("cart-updated", updateCount);
+    return () => window.removeEventListener("cart-updated", updateCount);
+  }, []);
+
   return (
     <>
       <nav className="fixed inset-x-0 top-0 z-[60] pt-3 sm:px-4 md:px-6 md:pt-4 pointer-events-none flex justify-center">
@@ -203,8 +212,13 @@ export default function Navbar() {
               </div>
               <div className={`ml-auto flex shrink-0 items-center gap-2 md:gap-4 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isVisible ? "opacity-100 translate-x-0 scale-100" : "opacity-0 -translate-x-20 scale-75 pointer-events-none"
                 }`}>
-                <Link href="/cart">
+                <Link href="/cart" className="relative">
                   <ShoppingCart className="w-6 h-6 text-slate-800 cursor-pointer hover:text-[#0166A7] transition-colors" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white shadow-sm border-2 border-white">
+                      {cartCount}
+                    </span>
+                  )}
                 </Link>
                 <Button
                   asChild
