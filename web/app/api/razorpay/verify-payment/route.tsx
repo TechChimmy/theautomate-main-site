@@ -56,6 +56,9 @@ export async function POST(req: Request) {
       customer_phone,
       customer_comments,
       product_uuid,
+      // Optional — sent when checkout originates from the cart with multiple items.
+      // Shape: { course_slug, course_title, plan_id, plan_title, plan_price }[]
+      cart_items,
     } = await req.json();
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -529,61 +532,109 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
-    // 6.5. Create enrollment record in phase-2.enrollments
+    // 6.5. Create enrollment record(s) in phase-2.enrollments
+    //
+    // Cart mode  (cart_items present): one enrollment per cart item.
+    // Single mode (no cart_items):     one enrollment for the primary course.
     // ------------------------------------------------------------------
     const accessStartDate = new Date();
     const accessEndDate = new Date();
-    accessEndDate.setFullYear(accessEndDate.getFullYear() + 1); // 1 year access by default
+    accessEndDate.setFullYear(accessEndDate.getFullYear() + 1);
 
-    const { data: existingEnrollment } = await supabase
-      .from("enrollments")
-      .select("id, access_start_date")
-      .eq("user_id", userId)
-      .eq("course_id", finalCourseId)
-      .maybeSingle();
-
-    let enrollmentError;
-
-    if (existingEnrollment) {
-      const { error } = await supabase
-        .from("enrollments")
-        .update({
-          order_id: order.id,
-          product_id: finalProductUuid,
-          bundle_id: finalBundleId,
-          status: "active",
-          batch_type:
-            batch_type || req.headers.get("x-mock-batch") || "recorded",
-        })
-        .eq("id", existingEnrollment.id);
-      enrollmentError = error;
-    } else {
-      const { error } = await supabase.from("enrollments").insert({
-        user_id: userId,
-        order_id: order.id,
-        course_id: finalCourseId,
-        product_id: finalProductUuid,
-        bundle_id: finalBundleId,
-        status: "active",
-        batch_type: batch_type || req.headers.get("x-mock-batch") || "recorded",
-        access_start_date: accessStartDate.toISOString(),
-        access_end_date: accessEndDate.toISOString(),
-      });
-      enrollmentError = error;
+    interface CartItemPayload {
+      course_slug: string;
+      course_title: string;
+      plan_id: string;
+      plan_title: string;
+      plan_price: number;
     }
 
-    if (enrollmentError) {
-      console.error(
-        "[verify-payment] Enrollment insert error:",
-        enrollmentError,
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Failed to create enrollment record: ${enrollmentError?.message || JSON.stringify(enrollmentError)}`,
-        },
-        { status: 500 },
-      );
+    // Build the list of items to enroll.
+    const itemsToEnroll: CartItemPayload[] =
+      Array.isArray(cart_items) && cart_items.length > 0
+        ? cart_items
+        : [
+            {
+              course_slug: course_id,
+              course_title: course_name,
+              plan_id: bundle_id,
+              plan_title: bundle_id,
+              plan_price: amountPaise / 100,
+            },
+          ];
+
+    for (const cartItem of itemsToEnroll) {
+      // Resolve course ID for this item
+      let itemCourseId: string | null = null;
+
+      if (finalProductUuid && itemsToEnroll.length === 1) {
+        // Single-course mode — reuse already-resolved IDs
+        itemCourseId = finalCourseId;
+      } else {
+        // Cart mode — resolve by slug / title for each item
+        const { data: mcRow } = await supabasePublic
+          .from("maincourses")
+          .select("id")
+          .ilike("title", `%${cartItem.course_title}%`)
+          .limit(1)
+          .maybeSingle();
+        itemCourseId = mcRow?.id ?? finalCourseId; // fall back to primary if not found
+      }
+
+      // Resolve bundle ID for this item
+      let itemBundleId = finalBundleId;
+      if (cartItem.plan_title && cartItem.plan_title !== bundle_id) {
+        const planKeyword = cartItem.plan_title.split(" ")[0];
+        const { data: planRow } = await supabase
+          .from("bundles")
+          .select("id")
+          .ilike("bundle_name", `%${planKeyword}%`)
+          .limit(1)
+          .maybeSingle();
+        if (planRow) itemBundleId = planRow.id;
+      }
+
+      const { data: existingEnrollment } = await supabase
+        .from("enrollments")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("course_id", itemCourseId)
+        .maybeSingle();
+
+      let enrollmentError;
+      if (existingEnrollment) {
+        const { error } = await supabase
+          .from("enrollments")
+          .update({
+            order_id: order.id,
+            bundle_id: itemBundleId,
+            status: "active",
+            batch_type: batch_type || "recorded",
+          })
+          .eq("id", existingEnrollment.id);
+        enrollmentError = error;
+      } else {
+        const { error } = await supabase.from("enrollments").insert({
+          user_id: userId,
+          order_id: order.id,
+          course_id: itemCourseId,
+          product_id: finalProductUuid,
+          bundle_id: itemBundleId,
+          status: "active",
+          batch_type: batch_type || "recorded",
+          access_start_date: accessStartDate.toISOString(),
+          access_end_date: accessEndDate.toISOString(),
+        });
+        enrollmentError = error;
+      }
+
+      if (enrollmentError) {
+        console.error(
+          `[verify-payment] Enrollment error for course "${cartItem.course_title}":`,
+          enrollmentError,
+        );
+        // Log but don't hard-fail — other courses in the cart should still enroll
+      }
     }
 
     // ------------------------------------------------------------------

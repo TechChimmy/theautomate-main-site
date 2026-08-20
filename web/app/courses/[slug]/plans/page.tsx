@@ -10,7 +10,7 @@ interface Props {
 export default async function CoursePlansPage({ params }: Props) {
   const { slug } = await params;
 
-  // Fetch ALL plans + course info (for title + recommended bundle IDs) in parallel
+  // Fetch ALL plans + course info in parallel
   const [allPlans, courseData] = await Promise.all([
     getPlans().catch(() => []),
     getCoursePlans(slug).catch(() => null),
@@ -19,7 +19,7 @@ export default async function CoursePlansPage({ params }: Props) {
   // Course must exist — 404 if not found
   if (!courseData) return notFound();
 
-  // Collect the IDs of plans the course recommends via bundles[]
+  // IDs of plans the course recommends via bundles[]
   const recommendedIds = new Set(
     (courseData.bundles ?? []).map((b) => b._id)
   );
@@ -53,7 +53,10 @@ export default async function CoursePlansPage({ params }: Props) {
                 key={plan._id}
                 bundle={plan}
                 courseSlug={slug}
-                buttonLabel="Buy Plan"
+                // Pass the course's own Sanity _id and title so the cart item
+                // carries a (courseId, planId) pair — not a (planId, planId) pair.
+                courseId={courseData._id}
+                courseTitle={courseData.title}
                 recommended={recommendedIds.has(plan._id)}
               />
             ))}

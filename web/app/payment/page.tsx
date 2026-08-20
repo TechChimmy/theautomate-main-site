@@ -23,6 +23,9 @@ interface SearchParams {
   planId?: string;
   planName?: string;
   planPrice?: string;
+  // Set to "1" when navigating from the cart page with multiple items.
+  // PaymentPageClient will read all items directly from localStorage.
+  fromCart?: string;
 }
 
 interface Props {
@@ -52,7 +55,6 @@ export default async function PaymentPage({ searchParams }: Props) {
   const params = await searchParams;
 
   const courseSlug = params.course ?? "";
-  // Accept both bundleId (PricingCard) and planId (direct navigation)
   const bundleId = params.bundleId ?? params.planId ?? "";
   const bundleTitle = params.bundleTitle ?? params.planName ?? "";
   const amount = Number(params.amount ?? params.planPrice ?? 0);
@@ -60,20 +62,22 @@ export default async function PaymentPage({ searchParams }: Props) {
   const name = params.name ?? "";
   const email = params.email ?? "";
   const phone = params.phone ?? "";
+  // fromCart=1 means PaymentPageClient will read all items from localStorage
+  const fromCart = params.fromCart === "1";
 
-  // Fetch course title + plan in parallel — both are optional graceful fallbacks
+  // When coming from cart with multiple items, skip the Sanity fetches —
+  // the client will read everything it needs from localStorage.
+  // For single-course checkout (fromCart=false) we fetch as before.
   const [courseData, planData] = await Promise.all([
-    courseSlug
+    !fromCart && courseSlug
       ? client
           .fetch<{ title: string; productUuid: string } | null>(
             COURSE_TITLE_QUERY,
-            {
-              slug: courseSlug,
-            },
+            { slug: courseSlug },
           )
           .catch(() => null)
       : Promise.resolve(null),
-    bundleId
+    !fromCart && bundleId
       ? client.fetch(PLAN_QUERY, { planId: bundleId }).catch(() => null)
       : Promise.resolve(null),
   ]);
@@ -99,6 +103,7 @@ export default async function PaymentPage({ searchParams }: Props) {
           initialName={name}
           initialEmail={email}
           initialPhone={phone}
+          fromCart={fromCart}
         />
       </Suspense>
     </main>

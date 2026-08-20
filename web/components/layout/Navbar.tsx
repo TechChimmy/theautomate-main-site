@@ -15,7 +15,6 @@ const navLinks = [
   { name: "Courses", href: "/courses" },
   { name: "Blog", href: "/blogs" },
   { name: "Case Studies", href: "/case-studies" },
-  { name: "Cart", href: "/cart" },
 ];
 
 export default function Navbar() {

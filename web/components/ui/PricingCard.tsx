@@ -14,92 +14,105 @@ import { addToCart, removeFromCart, getCart } from "@/lib/services/cart";
 interface PricingCardProps {
   bundle: Plan;
   courseSlug?: string;
+  /**
+   * Sanity courseDetails._id for the course this card belongs to.
+   * Required for correct cart identity. When omitted (e.g. the generic
+   * /plans page), cart add/remove is disabled gracefully.
+   */
+  courseId?: string;
+  /** Human-readable course name stored in the cart item. */
+  courseTitle?: string;
   /** Override the primary button label (legacy prop — still respected) */
   buttonLabel?: string;
   /** Override the primary button href entirely (legacy prop — still respected) */
   buttonHref?: string;
   /** When true, shows a "Recommended" badge on the card */
   recommended?: boolean;
-  userEmail?: string;
-  userName?: string;
-  userPhone?: string;
 }
 
 /**
  * Plan card used on the course plans grid.
  *
- * Button behaviour per badge:
- *  - Starter / Pro  → [View Plan]  [Buy Plan]
- *  - Premium        → [View Plan]  (no Buy Plan)
+ * Cart identity: (courseId, bundle._id) — two courses with the same plan
+ * are independent cart items.
  *
- * Passing buttonHref or buttonLabel overrides the Buy Plan button only
- * (backward-compatible with callers that pass those props).
+ * Button behaviour per badge:
+ *  - Starter / Pro  → [View Plan]  [Add to Cart / Added to Cart]
+ *  - Premium        → [View Plan]  (no cart action)
  */
 export function PricingCard({
   bundle,
   courseSlug,
+  courseId,
+  courseTitle,
   buttonLabel,
   buttonHref,
   recommended = false,
-  userEmail,
-  userName,
-  userPhone,
 }: PricingCardProps) {
   const imageUrl = bundle.coverImage
     ? urlFor(bundle.coverImage).width(800).url()
     : "/placeholder.png";
 
-  const batchLabel = "Recorded Video Access";
+  const batchLabel = bundle.batchOptions?.length
+    ? bundle.batchOptions.join(" or ")
+    : "Weekday or Weekend";
 
-  const [isInCart, setIsInCart] = useState(false);
+  // ---------------------------------------------------------------------------
+  // Cart state — keyed on (courseId, bundle._id) so Course A + Starter and
+  // Course B + Starter are completely independent.
+  // ---------------------------------------------------------------------------
+  const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
+    if (!courseId) return;
+
     const checkCart = () => {
       const cart = getCart();
-      setIsInCart(cart.some(item => item.productId === bundle._id));
+      setAddedToCart(
+        cart.some(
+          (item) =>
+            item.courseId === courseId &&
+            item.selectedPlanId === bundle._id
+        )
+      );
     };
 
-    // Initial check
-    checkCart();
-
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === "automate-learning-cart") {
-        checkCart();
-      }
-    };
+    checkCart(); // initial
 
     window.addEventListener("cart-updated", checkCart);
-    window.addEventListener("storage", handleStorage);
-
+    window.addEventListener("storage", checkCart);
     return () => {
       window.removeEventListener("cart-updated", checkCart);
-      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("storage", checkCart);
     };
-  }, [bundle._id]);
+  }, [courseId, bundle._id]);
 
-  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleCartToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    if (isInCart) {
-      removeFromCart(bundle._id);
+    if (!courseId) return; // guard — no courseId means we cannot build a valid cart item
+
+    if (addedToCart) {
+      removeFromCart(courseId, bundle._id);
     } else {
       addToCart({
-        productId: bundle._id,
-        productTitle: bundle.title,
-        productSlug: courseSlug ?? bundle._id,
-        thumbnailUrl: bundle.coverImage ? urlFor(bundle.coverImage).width(800).url() : null,
+        courseId,
+        courseTitle: courseTitle ?? courseSlug ?? "Course",
+        courseSlug: courseSlug ?? "",
         selectedPlanId: bundle._id,
         selectedPlanTitle: bundle.title,
         selectedPlanPrice: bundle.price,
+        thumbnailUrl: bundle.coverImage
+          ? urlFor(bundle.coverImage).width(400).url()
+          : null,
       });
     }
   };
 
-  // --- Payment URL (Buy Plan) ---
+  // ---------------------------------------------------------------------------
+  // Navigation URLs
+  // ---------------------------------------------------------------------------
   const paymentParams = new URLSearchParams();
   if (courseSlug) paymentParams.set("course", courseSlug);
-  if (userEmail) paymentParams.set("email", userEmail);
-  if (userName) paymentParams.set("name", userName);
-  if (userPhone) paymentParams.set("phone", userPhone);
   paymentParams.set("bundleId", bundle._id);
   paymentParams.set("bundleTitle", bundle.title);
   paymentParams.set("amount", bundle.price.toString());
@@ -107,13 +120,13 @@ export function PricingCard({
   const buyHref = buttonHref ?? paymentUrl;
   const buyLabel = buttonLabel ?? "Buy Plan";
 
-  // --- View Plan URL ---
-  const badgeSlug = bundle.badge.toLowerCase(); // "starter" | "pro" | "premium"
+  const badgeSlug = bundle.badge.toLowerCase();
   const viewPlanHref = courseSlug
     ? `/courses/${courseSlug}/plans/${badgeSlug}`
-    : `/plans`; // graceful fallback when no courseSlug
+    : `/plans`;
 
   const isPremium = badgeSlug === "premium";
+  const canAddToCart = Boolean(courseId); // only meaningful when courseId is known
 
   return (
     <div
@@ -158,7 +171,7 @@ export function PricingCard({
         </h3>
         <p className="text-sm text-slate-500 mb-5">By Auto-Mate</p>
 
-        {/* Duration + batch metadata */}
+        {/* Metadata */}
         <div className="flex items-center gap-5 text-xs font-medium text-slate-600 mb-6">
           <div className="flex items-center gap-1.5">
             <Clock className="w-4 h-4 text-slate-400" />
@@ -172,14 +185,14 @@ export function PricingCard({
 
         <div className="h-px bg-slate-100 w-full mb-6" />
 
-        {/* Feature list — reuses extracted component */}
+        {/* Feature list */}
         <div className="flex-grow mb-8">
           <PlanFeatureList features={bundle.features ?? []} />
         </div>
 
         {/* Action buttons */}
         {isPremium ? (
-          /* Premium: View Plan only */
+          /* Premium: View Plan only — no cart */
           <Link href={viewPlanHref} className="mt-auto">
             <Button
               variant="outline"
@@ -189,7 +202,7 @@ export function PricingCard({
             </Button>
           </Link>
         ) : (
-          /* Starter / Pro: View Plan + Buy Plan side by side */
+          /* Starter / Pro: View Plan + Add to Cart */
           <div className="mt-auto flex gap-3">
             <Link href={viewPlanHref} className="flex-1">
               <Button
@@ -199,17 +212,32 @@ export function PricingCard({
                 View Plan
               </Button>
             </Link>
-            <div className="flex-1">
-              <Button
-                variant="outline"
-                onClick={handleAddToCart}
-                className={`w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all ${
-                  isInCart ? "bg-green-600 hover:bg-green-700 text-white border-transparent" : ""
-                }`}
-              >
-                {isInCart ? "Added to cart" : "Add to Cart"}
-              </Button>
-            </div>
+
+            {canAddToCart ? (
+              <div className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={handleCartToggle}
+                  className={`w-full rounded-full font-bold py-6 transition-all ${
+                    addedToCart
+                      ? "bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700"
+                      : "border-slate-300 text-slate-700 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7]"
+                  }`}
+                >
+                  {addedToCart ? "Added to Cart" : "Add to Cart"}
+                </Button>
+              </div>
+            ) : (
+              /* Fallback for pages that don't provide courseId (e.g. /plans) */
+              <Link href={buyHref} className="flex-1">
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full border-slate-300 text-slate-700 font-bold py-6 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7] transition-all"
+                >
+                  {buyLabel}
+                </Button>
+              </Link>
+            )}
           </div>
         )}
       </div>

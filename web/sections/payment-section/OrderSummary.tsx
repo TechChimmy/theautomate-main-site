@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Script from "next/script";
 import PaymentStatusModal from "./PaymentStatusModal";
+import { CartItem, clearCart } from "@/lib/services/cart";
 
 interface SummaryProps {
   courseName: string;
@@ -22,6 +23,11 @@ interface SummaryProps {
     comments: string;
   };
   targetBundlePrice?: number;
+  /**
+   * When provided, the summary renders one line per cart item and sends
+   * all items to verify-payment for enrollment. The cart is cleared on success.
+   */
+  cartItems?: CartItem[];
 }
 
 declare global {
@@ -39,6 +45,7 @@ export default function OrderSummary({
   targetBundlePrice,
   batch,
   userData,
+  cartItems,
 }: SummaryProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [modal, setModal] = useState<{
@@ -54,10 +61,18 @@ export default function OrderSummary({
     message: "",
   });
 
-  const finalPrice = customAmount || 0;
+  // Cart mode: use sum of all cart items. Single-course mode: use customAmount.
+  const isCartMode = Boolean(cartItems && cartItems.length > 0);
+  const finalPrice = isCartMode
+    ? cartItems!.reduce((s, i) => s + i.selectedPlanPrice, 0)
+    : customAmount || 0;
+
+  // Description shown in Razorpay modal
+  const razorpayDescription = isCartMode
+    ? `Enrollment for ${cartItems!.length} courses`
+    : `Enrollment for ${courseName}`;
 
   const handlePayment = async () => {
-    // Validation check
     if (!userData.name || !userData.email || !userData.phone) {
       setModal({
         isOpen: true,
@@ -76,7 +91,7 @@ export default function OrderSummary({
     });
 
     try {
-      // 1. Create Order
+      // ── 1. Create a single Razorpay order for the full amount ──────────
       const response = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,7 +99,7 @@ export default function OrderSummary({
           courseKey,
           productUuid,
           bundleTitle,
-          amount: finalPrice,
+          amount: finalPrice,          // full cart total or single-course price
           email: userData.email,
           targetBundlePrice: targetBundlePrice || customAmount,
         }),
@@ -101,18 +116,11 @@ export default function OrderSummary({
 
       const order = await response.json();
 
-      // 2. Initialize Razorpay
-      console.log(
-        "Initializing Razorpay with Key:",
-        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      );
-
       if (!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) {
         setModal({
           isOpen: true,
           status: "error",
-          message:
-            "Razorpay Key ID is missing in the environment. Please check your deployment settings.",
+          message: "Razorpay Key ID is missing. Please check deployment settings.",
         });
         return;
       }
@@ -122,7 +130,7 @@ export default function OrderSummary({
         amount: order.amount,
         currency: order.currency,
         name: "Auto-Mate",
-        description: `Enrollment for ${courseName}`,
+        description: razorpayDescription,
         order_id: order.id,
         handler: async function (response: any) {
           setModal({
@@ -131,51 +139,82 @@ export default function OrderSummary({
             message: "Verifying payment...",
           });
 
-          // 3. Verify Payment
+          // ── 2. Verify payment — pass cart_items for multi-course enrollment ──
+          const verifyBody = isCartMode
+            ? {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                // Primary course (first item) for legacy fields
+                course_id: cartItems![0].courseSlug,
+                course_name: cartItems![0].courseTitle,
+                bundle_id: cartItems![0].selectedPlanTitle,
+                batch_type: "recorded",
+                customer_name: userData.name,
+                customer_email: userData.email,
+                customer_phone: userData.phone,
+                customer_comments: userData.comments,
+                // Full cart for multi-enrollment
+                cart_items: cartItems!.map((item) => ({
+                  course_slug: item.courseSlug,
+                  course_title: item.courseTitle,
+                  plan_id: item.selectedPlanId,
+                  plan_title: item.selectedPlanTitle,
+                  plan_price: item.selectedPlanPrice,
+                })),
+              }
+            : {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                course_id: courseKey,
+                product_uuid: productUuid,
+                course_name: courseName,
+                bundle_id: bundleTitle,
+                batch_type: "recorded",
+                customer_name: userData.name,
+                customer_email: userData.email,
+                customer_phone: userData.phone,
+                customer_comments: userData.comments,
+              };
+
           const verifyResponse = await fetch("/api/razorpay/verify-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              course_id: courseKey,
-              product_uuid: productUuid,
-              course_name: courseName,
-              bundle_id: bundleTitle,
-              batch_type: "recorded",
-              customer_name: userData.name,
-              customer_email: userData.email,
-              customer_phone: userData.phone,
-              customer_comments: userData.comments,
-            }),
+            body: JSON.stringify(verifyBody),
           });
 
           const verifyData = await verifyResponse.json();
 
           if (verifyData.success) {
-            // 4. Sync to Google Sheets
             setModal({
               isOpen: true,
               status: "loading",
               message: "Finalizing your enrollment...",
             });
 
+            // ── 3. Sync to sheet ────────────────────────────────────────
             try {
               await fetch("/api/sync-to-sheet", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   ...userData,
-                  course: courseName,
-                  batch: batch,
+                  course: isCartMode
+                    ? cartItems!.map((i) => i.courseTitle).join(", ")
+                    : courseName,
+                  batch,
                   amount: finalPrice,
                   paymentId: response.razorpay_payment_id,
                 }),
               });
             } catch (syncError) {
               console.error("Sync failed:", syncError);
-              // We don't block the success state if sync fails, but we log it
+            }
+
+            // ── 4. Clear the cart on success ────────────────────────────
+            if (isCartMode) {
+              clearCart();
             }
 
             const isExistingUser = Boolean(verifyData.existingUser);
@@ -191,13 +230,6 @@ export default function OrderSummary({
               redirectUrl: verifyData.redirectUrl,
               isExistingUser,
             });
-
-            // Removed auto-redirect so the user can click the "Download Invoice" button
-            // if (verifyData.redirectUrl) {
-            //   setTimeout(() => {
-            //     window.location.href = verifyData.redirectUrl;
-            //   }, 2000);
-            // }
           } else {
             setModal({
               isOpen: true,
@@ -213,9 +245,7 @@ export default function OrderSummary({
           email: userData.email,
           contact: userData.phone,
         },
-        theme: {
-          color: "#0A3D62",
-        },
+        theme: { color: "#0A3D62" },
         modal: {
           ondismiss: function () {
             setIsProcessing(false);
@@ -265,33 +295,58 @@ export default function OrderSummary({
           </div>
 
           <CardContent className="p-6 md:p-8 space-y-6">
-            {/* Course Details Row */}
-            <div className="flex justify-between items-start gap-4 border-b border-gray-50 pb-6">
-              <div className="space-y-1">
-                <h3 className="font-bold text-[#0A3D62] text-lg leading-tight">
-                  {courseName}
-                </h3>
-                <p className="text-sm text-slate-500">
-                  {bundleTitle || "Standard Plan"}
-                </p>
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-md w-fit">
-                  <Clock className="w-3.5 h-3.5 text-[#1E90FF]" />
-                  <span className="text-xs font-semibold text-[#1E90FF] capitalize">
-                    {batch} Batch
-                  </span>
-                </div>
+            {/* ── Line items ── */}
+            {isCartMode ? (
+              /* Cart mode: one row per item */
+              <div className="space-y-3 border-b border-gray-50 pb-6">
+                {cartItems!.map((item) => (
+                  <div
+                    key={`${item.courseId}-${item.selectedPlanId}`}
+                    className="flex justify-between items-start gap-4"
+                  >
+                    <div className="space-y-0.5">
+                      <h3 className="font-bold text-[#0A3D62] text-sm leading-tight">
+                        {item.courseTitle}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {item.selectedPlanTitle}
+                      </p>
+                    </div>
+                    <span className="font-bold text-sm text-[#0A3D62] whitespace-nowrap">
+                      ₹{item.selectedPlanPrice.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <span className="font-bold text-xl text-[#0A3D62] whitespace-nowrap">
-                ₹{finalPrice}
-              </span>
-            </div>
+            ) : (
+              /* Single-course mode: original layout */
+              <div className="flex justify-between items-start gap-4 border-b border-gray-50 pb-6">
+                <div className="space-y-1">
+                  <h3 className="font-bold text-[#0A3D62] text-lg leading-tight">
+                    {courseName}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {bundleTitle || "Standard Plan"}
+                  </p>
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-md w-fit">
+                    <Clock className="w-3.5 h-3.5 text-[#1E90FF]" />
+                    <span className="text-xs font-semibold text-[#1E90FF] capitalize">
+                      {batch} Batch
+                    </span>
+                  </div>
+                </div>
+                <span className="font-bold text-xl text-[#0A3D62] whitespace-nowrap">
+                  ₹{finalPrice.toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
 
-            {/* Pricing Table */}
+            {/* Pricing totals */}
             <div className="space-y-4">
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Subtotal</span>
                 <span className="font-medium text-gray-900">
-                  ₹{finalPrice}.00
+                  ₹{finalPrice.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
@@ -305,7 +360,7 @@ export default function OrderSummary({
                 <span className="font-bold text-[#0A3D62]">Grand Total</span>
                 <div className="text-right">
                   <span className="block font-black text-3xl text-[#1E90FF]">
-                    ₹{finalPrice}
+                    ₹{finalPrice.toLocaleString("en-IN")}
                   </span>
                   <span className="text-[10px] text-gray-400 font-medium italic">
                     Inclusive of all taxes
@@ -314,7 +369,7 @@ export default function OrderSummary({
               </div>
             </div>
 
-            {/* Action Button */}
+            {/* Pay button */}
             <Button
               className="w-full bg-[#1B262C] hover:bg-gray-500 h-14 md:h-16 rounded-full text-sm font-bold transition-all duration-300 shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handlePayment}
@@ -332,15 +387,13 @@ export default function OrderSummary({
                   : "Proceed to Payment"}
             </Button>
 
-            {/* Trust Footer */}
             <div className="flex items-center justify-center gap-2 text-gray-400 text-[11px] font-medium uppercase tracking-wider">
               <ShieldCheck className="w-4 h-4 text-green-500" />
-              Verified & Secure Checkout
+              Verified &amp; Secure Checkout
             </div>
           </CardContent>
         </Card>
 
-        {/* Trust Badge - More compact on mobile */}
         <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-transparent rounded-2xl border-l-4 border-[#1E90FF] flex items-center gap-4">
           <div className="shrink-0 w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-[#1E90FF]">
             <ShieldCheck className="w-6 h-6" />

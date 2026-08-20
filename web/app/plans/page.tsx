@@ -12,7 +12,7 @@ function formatCourseName(courseSlug?: string) {
 export default async function PlansPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ course?: string; email?: string; name?: string; phone?: string }>;
+  searchParams?: Promise<{ course?: string }>;
 }) {
   const params = await searchParams;
   const plans = await getPlans().catch(() => []);
@@ -45,9 +45,6 @@ export default async function PlansPage({
                   key={plan._id}
                   bundle={plan}
                   courseSlug={params?.course}
-                  userEmail={params?.email}
-                  userName={params?.name}
-                  userPhone={params?.phone}
                 />
               ))
             ) : (

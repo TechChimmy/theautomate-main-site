@@ -6,6 +6,7 @@ import { User, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import OrderSummary from "./OrderSummary";
+import { getCart, CartItem, clearCart } from "@/lib/services/cart";
 
 interface Props {
   courseSlug: string;
@@ -18,6 +19,8 @@ interface Props {
   initialName: string;
   initialEmail: string;
   initialPhone: string;
+  /** True when arriving from /cart with multiple items in localStorage */
+  fromCart?: boolean;
 }
 
 /**
@@ -35,12 +38,27 @@ export default function PaymentPageClient({
   initialName,
   initialEmail,
   initialPhone,
+  fromCart = false,
 }: Props) {
   const [batch, setBatch] = useState(initialBatch || "recorded");
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
   const [comments, setComments] = useState("");
+
+  // Cart items — populated on mount when coming from /cart with multiple items
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    if (fromCart) {
+      const items = getCart();
+      setCartItems(items);
+    }
+  }, [fromCart]);
+
+  // For single-course checkout the total is bundlePrice (possibly pro-rated).
+  // For cart checkout the total is sum of all cart items.
+  const cartTotal = cartItems.reduce((s, i) => s + i.selectedPlanPrice, 0);
 
   const [finalPrice, setFinalPrice] = useState(bundlePrice);
   const [isUpgradeEligible, setIsUpgradeEligible] = useState(false);
@@ -52,6 +70,9 @@ export default function PaymentPageClient({
   const [isPhoneAutofilled, setIsPhoneAutofilled] = useState(!!initialPhone);
 
   useEffect(() => {
+    // Skip upgrade check entirely for cart checkouts
+    if (fromCart) return;
+
     // Only check if it's a valid looking email and they are trying to buy Pro/Premium
     const isProPlan =
       bundleTitle.toLowerCase().includes("pro") ||
@@ -172,50 +193,77 @@ export default function PaymentPageClient({
             </AnimatePresence>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* Course — read-only */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-gray-700">
-                  Course
-                </Label>
-                <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-4 flex items-center text-slate-700 font-medium text-sm">
-                  {resolvedCourseTitle || courseTitle || "Your Course"}
+              {fromCart && cartItems.length > 0 ? (
+                /* ── Cart mode: show each course + plan as its own row ── */
+                <div className="sm:col-span-2 space-y-3">
+                  {cartItems.map((item) => (
+                    <div
+                      key={`${item.courseId}-${item.selectedPlanId}`}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {item.courseTitle}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {item.selectedPlanTitle}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-[#0A3D62] whitespace-nowrap ml-4">
+                        ₹{item.selectedPlanPrice.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                /* ── Single-course mode: original layout ── */
+                <>
+                  {/* Course — read-only */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Course
+                    </Label>
+                    <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-4 flex items-center text-slate-700 font-medium text-sm">
+                      {resolvedCourseTitle || courseTitle || "Your Course"}
+                    </div>
+                  </div>
 
-              {/* Plan — read-only */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-gray-700">
-                  Plan
-                </Label>
-                <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-4 flex items-center text-slate-700 font-medium text-sm">
-                  {bundleTitle}
-                </div>
-              </div>
+                  {/* Plan — read-only */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Plan
+                    </Label>
+                    <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-4 flex items-center text-slate-700 font-medium text-sm">
+                      {bundleTitle}
+                    </div>
+                  </div>
 
-              {/* Amount — read-only */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-gray-700">
-                  Amount
-                </Label>
-                <div
-                  className={`h-12 rounded-xl border flex items-center px-4 font-bold text-sm transition-colors ${isUpgradeEligible ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-slate-50 border-[#1E90FF] text-[#0A3D62]"}`}
-                >
-                  {isCheckingUpgrade ? (
-                    <span className="text-xs font-normal text-slate-500 animate-pulse">
-                      Calculating...
-                    </span>
-                  ) : (
-                    <>
-                      ₹{finalPrice.toLocaleString("en-IN")}
-                      {isUpgradeEligible && (
-                        <span className="ml-2 text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                          Pro-rated
+                  {/* Amount — read-only */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Amount
+                    </Label>
+                    <div
+                      className={`h-12 rounded-xl border flex items-center px-4 font-bold text-sm transition-colors ${isUpgradeEligible ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-slate-50 border-[#1E90FF] text-[#0A3D62]"}`}
+                    >
+                      {isCheckingUpgrade ? (
+                        <span className="text-xs font-normal text-slate-500 animate-pulse">
+                          Calculating...
                         </span>
+                      ) : (
+                        <>
+                          ₹{finalPrice.toLocaleString("en-IN")}
+                          {isUpgradeEligible && (
+                            <span className="ml-2 text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                              Pro-rated
+                            </span>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </motion.section>
 
@@ -325,10 +373,11 @@ export default function PaymentPageClient({
             courseKey={courseSlug}
             productUuid={resolvedProductUuid || productUuid}
             bundleTitle={bundleTitle}
-            customAmount={finalPrice}
+            customAmount={fromCart && cartItems.length > 0 ? cartTotal : finalPrice}
             targetBundlePrice={bundlePrice}
             batch={batch}
             userData={{ name, email, phone, comments }}
+            cartItems={fromCart && cartItems.length > 0 ? cartItems : undefined}
           />
         </div>
       </div>
