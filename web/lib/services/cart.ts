@@ -113,6 +113,14 @@ export function isInCart(courseId: string, selectedPlanId: string): boolean {
   );
 }
 
+export function isCourseInCart(courseId: string): boolean {
+  return getCart().some((item) => item.courseId === courseId);
+}
+
+export function getCartItemByCourseId(courseId: string): CartItem | undefined {
+  return getCart().find((item) => item.courseId === courseId);
+}
+
 export function clearCart(): void {
   saveCart([]);
 }

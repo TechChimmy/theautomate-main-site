@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Clock, LayoutList } from "lucide-react";
+import { Clock, LayoutList, Trash2, CircleSlash } from "lucide-react";
 import { StarRating } from "@/components/ui/StarRating";
 import { PlanFeatureList } from "@/components/ui/PlanFeatureList";
 import { urlFor } from "@/lib/sanity.client";
@@ -62,19 +62,20 @@ export function PricingCard({
   // Course B + Starter are completely independent.
   // ---------------------------------------------------------------------------
   const [addedToCart, setAddedToCart] = useState(false);
+  const [isOtherPlanInCart, setIsOtherPlanInCart] = useState(false);
 
   useEffect(() => {
     if (!courseId) return;
 
     const checkCart = () => {
       const cart = getCart();
-      setAddedToCart(
-        cart.some(
-          (item) =>
-            item.courseId === courseId &&
-            item.selectedPlanId === bundle._id
-        )
+      const thisPlanInCart = cart.some(
+        (item) => item.courseId === courseId && item.selectedPlanId === bundle._id
       );
+      const anyPlanInCart = cart.some((item) => item.courseId === courseId);
+      
+      setAddedToCart(thisPlanInCart);
+      setIsOtherPlanInCart(!thisPlanInCart && anyPlanInCart);
     };
 
     checkCart(); // initial
@@ -215,17 +216,38 @@ export function PricingCard({
 
             {canAddToCart ? (
               <div className="flex-1">
-                <Button
-                  variant="outline"
-                  onClick={handleCartToggle}
-                  className={`w-full rounded-full font-bold py-6 transition-all ${
-                    addedToCart
-                      ? "bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700"
-                      : "border-slate-300 text-slate-700 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7]"
-                  }`}
-                >
-                  {addedToCart ? "Added to Cart" : "Add to Cart"}
-                </Button>
+                {isOtherPlanInCart ? (
+                  <div
+                    title="Another plan for this course is already in your cart. Remove it from the cart to choose a different plan."
+                    className="w-full h-full cursor-not-allowed"
+                  >
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="w-full rounded-full font-bold py-6 transition-all flex items-center justify-center gap-2 bg-slate-50 text-slate-500 border-slate-200 pointer-events-none"
+                    >
+                      <CircleSlash className="w-4 h-4" /> Unavailable
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={handleCartToggle}
+                    className={`w-full rounded-full font-bold py-6 transition-all flex items-center justify-center gap-2 ${
+                      addedToCart
+                        ? "bg-[#0166A7] border-[#0166A7] text-white hover:bg-white hover:text-[#0166A7] hover:border-[#0166A7]"
+                        : "border-slate-300 text-slate-700 hover:bg-[#0166A7] hover:text-white hover:border-[#0166A7]"
+                    }`}
+                  >
+                    {addedToCart ? (
+                      <>
+                        Added to Cart <Trash2 className="w-4 h-4" />
+                      </>
+                    ) : (
+                      "Add to Cart"
+                    )}
+                  </Button>
+                )}
               </div>
             ) : (
               /* Fallback for pages that don't provide courseId (e.g. /plans) */
